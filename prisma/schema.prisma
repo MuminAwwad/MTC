@@ -1,0 +1,419 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+enum Currency {
+  ILS
+  USD
+  JOD
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  PARTIAL
+  CANCELLED
+}
+
+enum TicketStatus {
+  RECEIVED
+  DIAGNOSING
+  IN_REPAIR
+  WAITING_PARTS
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum DeviceType {
+  MOBILE
+  LAPTOP
+  DESKTOP
+  TABLET
+  OTHER
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+enum DebtStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+enum StockUnit {
+  PIECE
+  BOX
+  SET
+  METER
+  OTHER
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      UserRole @default(STAFF)
+  isActive  Boolean  @default(true)
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdInvoices    Invoice[]         @relation("InvoiceCreator")
+  createdTickets     MaintenanceTicket[] @relation("TicketCreator")
+  ticketUpdates      TicketUpdate[]
+  stockMovements     StockMovement[]
+  createdExpenses    Expense[]
+  debtPayments       DebtPayment[]
+  payablePayments    PayablePayment[]
+}
+
+// ─── Customer ─────────────────────────────────────────────────────────────────
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  address   String?
+  notes     String?
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  invoices           Invoice[]
+  maintenanceTickets MaintenanceTicket[]
+  debts              Debt[]
+}
+
+// ─── Supplier ─────────────────────────────────────────────────────────────────
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  company   String?
+  notes     String?
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  products  Product[]
+  payables  Payable[]
+}
+
+// ─── Category ─────────────────────────────────────────────────────────────────
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  icon      String?
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  products  Product[]
+}
+
+// ─── Product ──────────────────────────────────────────────────────────────────
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  sku         String?  @unique
+  barcode     String?  @unique
+  description String?
+  unit        StockUnit @default(PIECE)
+
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  costPrice   Decimal  @db.Decimal(10, 2)
+  sellPrice   Decimal  @db.Decimal(10, 2)
+  stockQty    Int      @default(0)
+  minStockQty Int      @default(0)
+
+  isActive  Boolean  @default(true)
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stockMovements StockMovement[]
+  invoiceItems   InvoiceItem[]
+  ticketParts    TicketPart[]
+}
+
+// ─── StockMovement ────────────────────────────────────────────────────────────
+
+model StockMovement {
+  id        String            @id @default(cuid())
+  productId String
+  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type      StockMovementType
+  qty       Int
+  note      String?
+  reference String?
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+}
+
+// ─── Invoice ──────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  items         InvoiceItem[]
+
+  subtotal        Decimal @db.Decimal(10, 2)
+  discountAmount  Decimal @db.Decimal(10, 2) @default(0)
+  discountPercent Decimal @db.Decimal(5, 2)  @default(0)
+  taxPercent      Decimal @db.Decimal(5, 2)  @default(0)
+  taxAmount       Decimal @db.Decimal(10, 2) @default(0)
+  total           Decimal @db.Decimal(10, 2)
+  paidAmount      Decimal @db.Decimal(10, 2) @default(0)
+  remainingAmount Decimal @db.Decimal(10, 2) @default(0)
+
+  currency     Currency @default(ILS)
+  exchangeRate Decimal  @db.Decimal(10, 4) @default(1)
+
+  status  InvoiceStatus @default(DRAFT)
+  notes   String?
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  createdById String?
+  createdBy   User?   @relation("InvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  debts       Debt[]
+}
+
+// ─── InvoiceItem ──────────────────────────────────────────────────────────────
+
+model InvoiceItem {
+  id        String  @id @default(cuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  name      String
+  qty       Int
+  unitPrice Decimal @db.Decimal(10, 2)
+  discount  Decimal @db.Decimal(10, 2) @default(0)
+  total     Decimal @db.Decimal(10, 2)
+}
+
+// ─── MaintenanceTicket ────────────────────────────────────────────────────────
+
+model MaintenanceTicket {
+  id           String         @id @default(cuid())
+  ticketNumber String         @unique
+  customerId   String
+  customer     Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  deviceType   DeviceType
+  deviceBrand  String?
+  deviceModel  String?
+  serialNumber String?
+
+  problemDescription String
+  diagnosis          String?
+  solution           String?
+
+  status   TicketStatus   @default(RECEIVED)
+  priority TicketPriority @default(NORMAL)
+
+  estimatedCost Decimal? @db.Decimal(10, 2)
+  finalCost     Decimal? @db.Decimal(10, 2)
+  depositPaid   Decimal  @db.Decimal(10, 2) @default(0)
+
+  technicianNotes String?
+  customerNotes   String?
+
+  receivedAt        DateTime  @default(now())
+  estimatedDelivery DateTime?
+  deliveredAt       DateTime?
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdById String?
+  createdBy   User?   @relation("TicketCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  parts    TicketPart[]
+  timeline TicketUpdate[]
+}
+
+// ─── TicketPart ───────────────────────────────────────────────────────────────
+
+model TicketPart {
+  id       String            @id @default(cuid())
+  ticketId String
+  ticket   MaintenanceTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  name     String
+  qty      Int
+  unitCost Decimal @db.Decimal(10, 2)
+  total    Decimal @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+}
+
+// ─── TicketUpdate ─────────────────────────────────────────────────────────────
+
+model TicketUpdate {
+  id       String            @id @default(cuid())
+  ticketId String
+  ticket   MaintenanceTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  status TicketStatus
+  note   String?
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+}
+
+// ─── Debt ─────────────────────────────────────────────────────────────────────
+
+model Debt {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  amount   Decimal  @db.Decimal(10, 2)
+  currency Currency @default(ILS)
+  reason   String?
+
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  status  DebtStatus @default(PENDING)
+  dueDate DateTime?
+  notes   String?
+
+  payments  DebtPayment[]
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ─── DebtPayment ──────────────────────────────────────────────────────────────
+
+model DebtPayment {
+  id     String @id @default(cuid())
+  debtId String
+  debt   Debt   @relation(fields: [debtId], references: [id], onDelete: Cascade)
+
+  amount Decimal @db.Decimal(10, 2)
+  note   String?
+
+  paidAt      DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+}
+
+// ─── Payable ──────────────────────────────────────────────────────────────────
+
+model Payable {
+  id         String   @id @default(cuid())
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  amount   Decimal  @db.Decimal(10, 2)
+  currency Currency @default(ILS)
+  reason   String?
+
+  status  DebtStatus @default(PENDING)
+  dueDate DateTime?
+  notes   String?
+
+  payments  PayablePayment[]
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ─── PayablePayment ───────────────────────────────────────────────────────────
+
+model PayablePayment {
+  id        String  @id @default(cuid())
+  payableId String
+  payable   Payable @relation(fields: [payableId], references: [id], onDelete: Cascade)
+
+  amount Decimal @db.Decimal(10, 2)
+  note   String?
+
+  paidAt      DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+}
+
+// ─── Expense ──────────────────────────────────────────────────────────────────
+
+model Expense {
+  id         String          @id @default(cuid())
+  categoryId String?
+  category   ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  amount      Decimal  @db.Decimal(10, 2)
+  currency    Currency @default(ILS)
+  description String?
+  date        DateTime @default(now())
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+}
+
+// ─── ExpenseCategory ──────────────────────────────────────────────────────────
+
+model ExpenseCategory {
+  id    String @id @default(cuid())
+  name  String
+  icon  String?
+  color String?
+
+  isDeleted Boolean   @default(false)
+  expenses  Expense[]
+}
+
+// ─── Counter ──────────────────────────────────────────────────────────────────
+
+model Counter {
+  id    String @id
+  value Int    @default(0)
+}

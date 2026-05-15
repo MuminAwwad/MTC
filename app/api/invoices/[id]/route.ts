@@ -1,0 +1,144 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { InvoiceStatus } from "@prisma/client";
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const invoice = await prisma.invoice.findFirst({
+      where: { id, isDeleted: false },
+      include: {
+        customer: true,
+        items: { include: { product: { select: { id: true, name: true, sku: true } } } },
+        debts: {
+          where: { isDeleted: false },
+          include: { payments: true },
+        },
+        createdBy: { select: { id: true, name: true } },
+      },
+    });
+    if (!invoice) return NextResponse.json({ error: "الفاتورة غير موجودة" }, { status: 404 });
+    return NextResponse.json(invoice);
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const body = await req.json();
+    const { status: newStatus, notes } = body;
+
+    const invoice = await prisma.invoice.findFirst({
+      where: { id, isDeleted: false },
+      include: { items: true, debts: { where: { isDeleted: false } } },
+    });
+    if (!invoice) return NextResponse.json({ error: "الفاتورة غير موجودة" }, { status: 404 });
+
+    const validTransitions: Record<InvoiceStatus, InvoiceStatus[]> = {
+      DRAFT: ["ISSUED", "CANCELLED"],
+      ISSUED: ["PARTIAL", "PAID", "CANCELLED"],
+      PARTIAL: ["PAID", "CANCELLED"],
+      PAID: [],
+      CANCELLED: [],
+    };
+
+    if (newStatus && !validTransitions[invoice.status].includes(newStatus)) {
+      return NextResponse.json({ error: "تحويل الحالة غير مسموح" }, { status: 400 });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (newStatus === "ISSUED" && invoice.status === "DRAFT") {
+        for (const item of invoice.items) {
+          if (item.productId && item.qty > 0) {
+            const product = await tx.product.findUnique({ where: { id: item.productId } });
+            if (!product) continue;
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stockQty: Math.max(0, product.stockQty - item.qty) },
+            });
+            await tx.stockMovement.create({
+              data: {
+                productId: item.productId,
+                type: "OUT",
+                qty: item.qty,
+                note: `فاتورة ${invoice.invoiceNumber}`,
+                reference: invoice.invoiceNumber,
+              },
+            });
+          }
+        }
+
+        const remaining = Number(invoice.remainingAmount);
+        if (remaining > 0 && invoice.debts.length === 0) {
+          await tx.debt.create({
+            data: {
+              customerId: invoice.customerId,
+              invoiceId: invoice.id,
+              amount: remaining,
+              currency: invoice.currency,
+              reason: `فاتورة ${invoice.invoiceNumber}`,
+              status: "PENDING",
+            },
+          });
+        }
+      }
+
+      if (newStatus === "CANCELLED" && invoice.status !== "DRAFT") {
+        for (const item of invoice.items) {
+          if (item.productId && item.qty > 0) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stockQty: { increment: item.qty } },
+            });
+            await tx.stockMovement.create({
+              data: {
+                productId: item.productId,
+                type: "IN",
+                qty: item.qty,
+                note: `إلغاء فاتورة ${invoice.invoiceNumber}`,
+                reference: invoice.invoiceNumber,
+              },
+            });
+          }
+        }
+      }
+
+      return tx.invoice.update({
+        where: { id },
+        data: {
+          ...(newStatus ? { status: newStatus as InvoiceStatus } : {}),
+          ...(notes !== undefined ? { notes } : {}),
+        },
+        include: {
+          customer: true,
+          items: { include: { product: { select: { id: true, name: true, sku: true } } } },
+          debts: { where: { isDeleted: false }, include: { payments: true } },
+        },
+      });
+    });
+
+    return NextResponse.json(updated);
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const invoice = await prisma.invoice.findFirst({ where: { id, isDeleted: false } });
+    if (!invoice) return NextResponse.json({ error: "الفاتورة غير موجودة" }, { status: 404 });
+    if (invoice.status !== "DRAFT") {
+      return NextResponse.json({ error: "يمكن حذف المسودات فقط" }, { status: 400 });
+    }
+    await prisma.invoice.update({ where: { id }, data: { isDeleted: true } });
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+  }
+}
