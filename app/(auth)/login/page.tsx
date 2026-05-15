@@ -111,6 +111,12 @@ export default function LoginPage() {
               </div>
             </FormField>
 
+            <div className="text-left">
+              <Link href="/forgot-password" className="text-xs text-[#64748b] hover:text-[#104e98]">
+                نسيت كلمة المرور؟
+              </Link>
+            </div>
+
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
                 {error}
