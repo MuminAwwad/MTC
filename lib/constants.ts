@@ -11,7 +11,7 @@ import type {
 
 export const SHOP_INFO = {
   name: "MTC Electronics",
-  nameAr: "MTC للإلكترونيات",
+  nameAr: "MTC Electronics",
   phone: "0599880618",
   address: "نابلس، فلسطين",
   addressEn: "Nablus, Palestine",

@@ -11,7 +11,7 @@ const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
 
 export const metadata: Metadata = {
   title: "MTC Electronics - نظام إدارة الأعمال",
-  description: "نظام إدارة متكامل لمتجر MTC للإلكترونيات - نابلس، فلسطين",
+  description: "نظام إدارة متكامل لمتجر MTC Electronics - نابلس، فلسطين",
 };
 
 export default function RootLayout({
