@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { SHOP_INFO, INVOICE_STATUS_LABELS } from "@/lib/constants";
 import { formatDate, formatDateTime } from "@/lib/formatters";
+import { buildInvoiceWhatsAppUrl } from "@/lib/whatsapp";
 import PrintButton from "./PrintButton";
 
 export default async function PrintInvoicePage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,6 +32,21 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
       {/* Print button — hidden in print */}
       <div className="no-print fixed top-4 left-4 flex gap-2 z-10">
         <PrintButton />
+        <a
+          href={buildInvoiceWhatsAppUrl({
+            invoiceNumber: invoice.invoiceNumber,
+            customerName: invoice.customer.name,
+            customerPhone: invoice.customer.phone,
+            currency: invoice.currency,
+            total: Number(invoice.total),
+            remaining: Number(invoice.remainingAmount),
+          })}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 text-sm bg-[#25d366] text-white rounded-lg hover:bg-[#1da851]"
+        >
+          واتساب
+        </a>
         <a href={`/invoices/${id}`} className="px-4 py-2 text-sm border rounded-lg bg-white hover:bg-gray-50">
           العودة
         </a>

@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { Printer, CreditCard, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { Printer, CreditCard, X, CheckCircle2, AlertCircle, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader, StatusBadge, SectionCard, LoadingSkeleton, ConfirmDialog, CurrencyDisplay, useToast } from "@/components/shared";
 import { INVOICE_STATUS_LABELS } from "@/lib/constants";
 import { formatDate, formatDateTime } from "@/lib/formatters";
+import { buildInvoiceWhatsAppUrl } from "@/lib/whatsapp";
 import type { InvoiceStatus, Currency } from "@prisma/client";
 
 interface InvoiceDetail {
@@ -132,6 +133,22 @@ export default function InvoiceDetailPage() {
                 <Printer className="h-4 w-4" />طباعة
               </Button>
             </Link>
+            <a
+              href={buildInvoiceWhatsAppUrl({
+                invoiceNumber: invoice.invoiceNumber,
+                customerName: invoice.customer.name,
+                customerPhone: invoice.customer.phone,
+                currency: invoice.currency,
+                total: invoice.total,
+                remaining: invoice.remainingAmount,
+              })}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button variant="outline" className="gap-2 text-[#25d366] border-[#25d366]/40 hover:bg-[#25d366]/10 hover:text-[#1da851]">
+                <MessageCircle className="h-4 w-4" />واتساب
+              </Button>
+            </a>
             {canIssue && (
               <Button onClick={() => changeStatus("ISSUED")} disabled={actionLoading}>
                 {actionLoading ? "..." : "إصدار الفاتورة"}
