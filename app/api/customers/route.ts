@@ -103,10 +103,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const normalizedPhone = parsed.data.phone?.trim() || null;
+
+    if (normalizedPhone) {
+      const existing = await prisma.customer.findFirst({
+        where: { phone: normalizedPhone, isDeleted: false },
+        select: { id: true, name: true },
+      });
+      if (existing) {
+        return NextResponse.json(
+          {
+            error: `عميل بنفس رقم الهاتف موجود مسبقًا: ${existing.name}`,
+            existingCustomerId: existing.id,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const customer = await prisma.customer.create({
       data: {
         name: parsed.data.name,
-        phone: parsed.data.phone ?? null,
+        phone: normalizedPhone,
         address: parsed.data.address ?? null,
         notes: parsed.data.notes ?? null,
       },

@@ -116,9 +116,27 @@ export async function PUT(
       return NextResponse.json({ error: "بيانات غير صالحة" }, { status: 400 });
     }
 
+    const normalizedPhone = parsed.data.phone?.trim() || null;
+
+    if (normalizedPhone) {
+      const existing = await prisma.customer.findFirst({
+        where: { phone: normalizedPhone, isDeleted: false, NOT: { id } },
+        select: { id: true, name: true },
+      });
+      if (existing) {
+        return NextResponse.json(
+          {
+            error: `عميل آخر بنفس رقم الهاتف موجود: ${existing.name}`,
+            existingCustomerId: existing.id,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const customer = await prisma.customer.update({
       where: { id },
-      data: parsed.data,
+      data: { ...parsed.data, phone: normalizedPhone },
     });
 
     return NextResponse.json(customer);

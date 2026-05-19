@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +12,7 @@ export default function NewCustomerPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [existingCustomerId, setExistingCustomerId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", address: "", notes: "" });
 
   const set = (k: keyof typeof form, v: string) =>
@@ -21,6 +23,7 @@ export default function NewCustomerPage() {
     if (!form.name.trim()) { setError("اسم العميل مطلوب"); return; }
     setLoading(true);
     setError("");
+    setExistingCustomerId(null);
     try {
       const res = await fetch("/api/customers", {
         method: "POST",
@@ -33,7 +36,11 @@ export default function NewCustomerPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "حدث خطأ"); return; }
+      if (!res.ok) {
+        setError(data.error ?? "حدث خطأ");
+        if (data.existingCustomerId) setExistingCustomerId(data.existingCustomerId);
+        return;
+      }
       router.push(`/customers/${data.id}`);
     } catch {
       setError("حدث خطأ في الاتصال");
@@ -94,7 +101,17 @@ export default function NewCustomerPage() {
         </SectionCard>
 
         {error && (
-          <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+          <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg space-y-2">
+            <p>{error}</p>
+            {existingCustomerId && (
+              <Link
+                href={`/customers/${existingCustomerId}`}
+                className="inline-block text-[#104e98] underline hover:text-[#0b3d7a]"
+              >
+                فتح ملف العميل الموجود
+              </Link>
+            )}
+          </div>
         )}
 
         <div className="flex justify-end gap-3">
