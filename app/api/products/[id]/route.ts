@@ -75,13 +75,38 @@ export async function PUT(
     }
 
     const data = parsed.data;
+    const normalizedSku = data.sku?.trim() || null;
+    const normalizedBarcode = data.barcode?.trim() || null;
 
-    if (data.sku) {
+    if (normalizedSku) {
       const exists = await prisma.product.findFirst({
-        where: { sku: data.sku, isDeleted: false, id: { not: id } },
+        where: { sku: normalizedSku, isDeleted: false, NOT: { id } },
+        select: { id: true, name: true },
       });
       if (exists) {
-        return NextResponse.json({ error: "رمز SKU مستخدم مسبقًا" }, { status: 409 });
+        return NextResponse.json(
+          {
+            error: `منتج آخر بنفس رمز SKU موجود: ${exists.name}`,
+            existingProductId: exists.id,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
+    if (normalizedBarcode) {
+      const exists = await prisma.product.findFirst({
+        where: { barcode: normalizedBarcode, isDeleted: false, NOT: { id } },
+        select: { id: true, name: true },
+      });
+      if (exists) {
+        return NextResponse.json(
+          {
+            error: `منتج آخر بنفس الباركود موجود: ${exists.name}`,
+            existingProductId: exists.id,
+          },
+          { status: 409 }
+        );
       }
     }
 
@@ -89,8 +114,8 @@ export async function PUT(
       where: { id },
       data: {
         ...data,
-        sku: data.sku ?? undefined,
-        barcode: data.barcode ?? undefined,
+        sku: data.sku === undefined ? undefined : normalizedSku,
+        barcode: data.barcode === undefined ? undefined : normalizedBarcode,
       },
     });
 

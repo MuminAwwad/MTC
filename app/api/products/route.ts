@@ -108,26 +108,36 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
-    // Check unique SKU/barcode
-    if (data.sku) {
+    const normalizedSku = data.sku?.trim() || null;
+    const normalizedBarcode = data.barcode?.trim() || null;
+
+    if (normalizedSku) {
       const exists = await prisma.product.findFirst({
-        where: { sku: data.sku, isDeleted: false },
+        where: { sku: normalizedSku, isDeleted: false },
+        select: { id: true, name: true },
       });
       if (exists) {
         return NextResponse.json(
-          { error: "رمز SKU مستخدم مسبقًا" },
+          {
+            error: `منتج بنفس رمز SKU موجود مسبقًا: ${exists.name}`,
+            existingProductId: exists.id,
+          },
           { status: 409 }
         );
       }
     }
 
-    if (data.barcode) {
+    if (normalizedBarcode) {
       const exists = await prisma.product.findFirst({
-        where: { barcode: data.barcode, isDeleted: false },
+        where: { barcode: normalizedBarcode, isDeleted: false },
+        select: { id: true, name: true },
       });
       if (exists) {
         return NextResponse.json(
-          { error: "الباركود مستخدم مسبقًا" },
+          {
+            error: `منتج بنفس الباركود موجود مسبقًا: ${exists.name}`,
+            existingProductId: exists.id,
+          },
           { status: 409 }
         );
       }
@@ -137,8 +147,8 @@ export async function POST(request: NextRequest) {
       const p = await tx.product.create({
         data: {
           name: data.name,
-          sku: data.sku || null,
-          barcode: data.barcode || null,
+          sku: normalizedSku,
+          barcode: normalizedBarcode,
           description: data.description || null,
           unit: data.unit,
           categoryId: data.categoryId || null,

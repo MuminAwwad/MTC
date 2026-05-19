@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +25,7 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [existingProductId, setExistingProductId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
@@ -62,6 +64,7 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
 
     setLoading(true);
     setError("");
+    setExistingProductId(null);
 
     const payload = {
       name: form.name,
@@ -94,6 +97,7 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
 
       if (!res.ok) {
         setError(data.error ?? "حدث خطأ");
+        if (data.existingProductId) setExistingProductId(data.existingProductId);
         return;
       }
 
@@ -290,8 +294,16 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
       </SectionCard>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
-          {error}
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg space-y-2">
+          <p>{error}</p>
+          {existingProductId && (
+            <Link
+              href={`/inventory/${existingProductId}`}
+              className="inline-block text-[#104e98] underline hover:text-[#0b3d7a]"
+            >
+              فتح المنتج الموجود
+            </Link>
+          )}
         </div>
       )}
 
