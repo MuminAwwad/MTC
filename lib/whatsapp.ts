@@ -12,16 +12,18 @@ export function buildInvoiceWhatsAppUrl(input: {
   customerName: string;
   customerPhone?: string | null;
   currency: Currency;
-  total: number;
-  remaining: number;
+  total: number | string;
+  remaining: number | string;
 }): string {
   const sym = CURRENCY_SYMBOLS[input.currency];
+  const total = Number(input.total) || 0;
+  const remaining = Number(input.remaining) || 0;
   const message = [
     `مرحبًا ${input.customerName}،`,
     "",
     `فاتورة رقم: ${input.invoiceNumber}`,
-    `الإجمالي: ${sym}${input.total.toFixed(2)}`,
-    `المتبقي: ${sym}${input.remaining.toFixed(2)}`,
+    `الإجمالي: ${sym}${total.toFixed(2)}`,
+    `المتبقي: ${sym}${remaining.toFixed(2)}`,
     "",
     `شكرًا لتعاملكم مع ${SHOP_INFO.nameAr}`,
   ].join("\n");
