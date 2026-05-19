@@ -139,8 +139,8 @@ export default function InvoiceDetailPage() {
                 customerName: invoice.customer.name,
                 customerPhone: invoice.customer.phone,
                 currency: invoice.currency,
-                total: invoice.total,
-                remaining: invoice.remainingAmount,
+                total: Number(invoice.total),
+                remaining: Number(invoice.remainingAmount),
               })}
               target="_blank"
               rel="noopener noreferrer"
