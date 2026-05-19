@@ -82,10 +82,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const normalizedPhone = parsed.data.phone?.trim() || null;
+
+    if (normalizedPhone) {
+      const existing = await prisma.supplier.findFirst({
+        where: { phone: normalizedPhone, isDeleted: false },
+        select: { id: true, name: true },
+      });
+      if (existing) {
+        return NextResponse.json(
+          {
+            error: `مورد بنفس رقم الهاتف موجود مسبقًا: ${existing.name}`,
+            existingSupplierId: existing.id,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const supplier = await prisma.supplier.create({
       data: {
         name: parsed.data.name,
-        phone: parsed.data.phone ?? null,
+        phone: normalizedPhone,
         company: parsed.data.company ?? null,
         notes: parsed.data.notes ?? null,
       },

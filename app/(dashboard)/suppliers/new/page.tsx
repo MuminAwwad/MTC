@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +12,7 @@ export default function NewSupplierPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [existingSupplierId, setExistingSupplierId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "", phone: "", company: "", notes: "",
   });
@@ -22,6 +24,7 @@ export default function NewSupplierPage() {
     if (!form.name) { setError("اسم المورد مطلوب"); return; }
     setLoading(true);
     setError("");
+    setExistingSupplierId(null);
     try {
       const res = await fetch("/api/suppliers", {
         method: "POST",
@@ -34,7 +37,11 @@ export default function NewSupplierPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "حدث خطأ"); return; }
+      if (!res.ok) {
+        setError(data.error ?? "حدث خطأ");
+        if (data.existingSupplierId) setExistingSupplierId(data.existingSupplierId);
+        return;
+      }
       router.push(`/suppliers/${data.id}`);
     } catch {
       setError("حدث خطأ في الاتصال");
@@ -71,7 +78,19 @@ export default function NewSupplierPage() {
           </div>
         </SectionCard>
 
-        {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+        {error && (
+          <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg space-y-2">
+            <p>{error}</p>
+            {existingSupplierId && (
+              <Link
+                href={`/suppliers/${existingSupplierId}`}
+                className="inline-block text-[#104e98] underline hover:text-[#0b3d7a]"
+              >
+                فتح ملف المورد الموجود
+              </Link>
+            )}
+          </div>
+        )}
 
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>إلغاء</Button>

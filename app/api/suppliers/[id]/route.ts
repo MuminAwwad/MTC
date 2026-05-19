@@ -61,9 +61,27 @@ export async function PUT(
       return NextResponse.json({ error: "بيانات غير صالحة" }, { status: 400 });
     }
 
+    const normalizedPhone = parsed.data.phone?.trim() || null;
+
+    if (normalizedPhone) {
+      const existing = await prisma.supplier.findFirst({
+        where: { phone: normalizedPhone, isDeleted: false, NOT: { id } },
+        select: { id: true, name: true },
+      });
+      if (existing) {
+        return NextResponse.json(
+          {
+            error: `مورد آخر بنفس رقم الهاتف موجود: ${existing.name}`,
+            existingSupplierId: existing.id,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const supplier = await prisma.supplier.update({
       where: { id },
-      data: parsed.data,
+      data: { ...parsed.data, phone: normalizedPhone },
     });
 
     return NextResponse.json(supplier);

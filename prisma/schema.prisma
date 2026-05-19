@@ -116,7 +116,7 @@ model Customer {
 model Supplier {
   id        String   @id @default(cuid())
   name      String
-  phone     String?
+  phone     String?  @unique
   company   String?
   notes     String?
   isDeleted Boolean  @default(false)
