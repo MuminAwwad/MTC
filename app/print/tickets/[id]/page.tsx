@@ -37,7 +37,8 @@ export default async function PrintTicketPage({ params }: { params: Promise<{ id
 
       <div className="max-w-[148mm] mx-auto p-6 min-h-screen">
         {/* Header */}
-        <div className="text-center mb-6 pb-4 border-b-2 border-[#104e98]">
+        <div className="flex flex-col items-center text-center mb-6 pb-4 border-b-2 border-[#104e98]">
+          <img src="/logo-blue.png" alt={SHOP_INFO.name} className="h-20 w-20 object-contain mb-2" />
           <h1 className="text-xl font-bold text-[#0b2345]">{SHOP_INFO.name}</h1>
           <p className="text-xs text-[#64748b]">{SHOP_INFO.address} · {SHOP_INFO.phone}</p>
           <p className="text-lg font-bold text-[#104e98] mt-3 ltr">{ticket.ticketNumber}</p>

@@ -77,7 +77,7 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
         {/* Header */}
         <div className="flex justify-between items-start mb-8 pb-6 border-b-2 border-[#104e98] gap-6">
           <div className="flex items-center gap-4 min-w-0">
-            <img src="/logo-blue.png" alt={SHOP_INFO.name} className="h-16 w-16 object-contain flex-shrink-0" />
+            <img src="/logo-blue.png" alt={SHOP_INFO.name} className="h-24 w-24 object-contain flex-shrink-0" />
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-[#0b2345] leading-tight">{SHOP_INFO.name}</h1>
               <p className="text-sm text-[#64748b] mt-1">{SHOP_INFO.address}</p>
