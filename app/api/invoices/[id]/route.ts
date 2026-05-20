@@ -1,8 +1,9 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { InvoiceStatus } from "@prisma/client";
 import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
+import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -28,6 +29,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const body = await req.json();
@@ -59,6 +63,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             await tx.stockMovement.create({
               data: {
                 productId: item.productId,
+                createdById: ctx.dbUser.id,
                 type: "OUT",
                 qty: item.qty,
                 note: `فاتورة ${invoice.invoiceNumber}`,
@@ -93,6 +98,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             await tx.stockMovement.create({
               data: {
                 productId: item.productId,
+                createdById: ctx.dbUser.id,
                 type: "IN",
                 qty: item.qty,
                 note: `إلغاء فاتورة ${invoice.invoiceNumber}`,

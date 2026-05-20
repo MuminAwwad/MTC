@@ -3,6 +3,7 @@ import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { Currency } from "@prisma/client";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
+import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
@@ -57,6 +58,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { categoryId, amount, currency = "ILS", description, date } = await req.json();
 
@@ -69,6 +73,7 @@ export async function POST(req: NextRequest) {
         currency: currency as Currency,
         description: description || null,
         date: date ? new Date(date) : new Date(),
+        createdById: ctx.dbUser.id,
       },
       include: { category: true },
     });

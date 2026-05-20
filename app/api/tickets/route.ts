@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { generateTicketNumber } from "@/lib/invoice-number";
 import { TicketStatus, TicketPriority, DeviceType } from "@prisma/client";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
+import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
@@ -53,6 +54,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const body = await req.json();
     const {
@@ -80,6 +84,7 @@ export async function POST(req: NextRequest) {
         data: {
           ticketNumber,
           customerId,
+          createdById: ctx.dbUser.id,
           deviceType: deviceType as DeviceType,
           deviceBrand: deviceBrand || null,
           deviceModel: deviceModel || null,

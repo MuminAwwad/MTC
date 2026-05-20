@@ -1,8 +1,9 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
+import { requireUser } from "@/lib/auth";
 
 const schema = z.object({
   type: z.enum(["IN", "OUT", "ADJUSTMENT"]),
@@ -14,6 +15,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const body = await request.json();
@@ -49,7 +53,7 @@ export async function POST(
 
       const updated = await tx.product.findUnique({ where: { id }, select: { stockQty: true } });
       const movement = await tx.stockMovement.create({
-        data: { productId: id, type, qty, note: note ?? null },
+        data: { productId: id, type, qty, note: note ?? null, createdById: ctx.dbUser.id },
       });
       return { movement, newStockQty: updated?.stockQty ?? 0 };
     });

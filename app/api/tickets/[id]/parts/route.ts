@@ -1,7 +1,8 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
+import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -19,6 +20,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const { productId, name, qty, unitCost } = await req.json();
@@ -50,6 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         await tx.stockMovement.create({
           data: {
             productId,
+            createdById: ctx.dbUser.id,
             type: "OUT",
             qty,
             note: `قطعة لتذكرة ${ticket.ticketNumber}`,
@@ -72,6 +77,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const { partId } = await req.json();
@@ -88,6 +96,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         await tx.stockMovement.create({
           data: {
             productId: part.productId,
+            createdById: ctx.dbUser.id,
             type: "IN",
             qty: part.qty,
             note: `إلغاء قطعة من تذكرة`,

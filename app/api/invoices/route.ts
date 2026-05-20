@@ -1,10 +1,11 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { generateInvoiceNumber } from "@/lib/invoice-number";
 import { InvoiceStatus } from "@prisma/client";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
 import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
+import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
@@ -75,6 +76,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const body = await req.json();
     const {
@@ -121,6 +125,7 @@ export async function POST(req: NextRequest) {
         data: {
           invoiceNumber,
           customerId,
+          createdById: ctx.dbUser.id,
           subtotal,
           discountAmount: discAmt,
           discountPercent,
@@ -163,6 +168,7 @@ export async function POST(req: NextRequest) {
             await tx.stockMovement.create({
               data: {
                 productId: item.productId,
+                createdById: ctx.dbUser.id,
                 type: "OUT",
                 qty: item.qty,
                 note: `فاتورة ${invoiceNumber}`,

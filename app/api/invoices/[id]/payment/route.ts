@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const { amount, note } = await req.json();
@@ -50,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const debtStatus = debtPaid >= debtTotal ? "PAID" : "PARTIAL";
 
         await tx.debtPayment.create({
-          data: { debtId: debt.id, amount: payment, note },
+          data: { debtId: debt.id, amount: payment, note, createdById: ctx.dbUser.id },
         });
         await tx.debt.update({
           where: { id: debt.id },

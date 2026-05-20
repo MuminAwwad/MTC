@@ -3,6 +3,7 @@ import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
+import { requireUser } from "@/lib/auth";
 
 const schema = z.object({
   name: z.string().min(1, "اسم المنتج مطلوب"),
@@ -96,6 +97,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const body = await request.json();
     const parsed = schema.safeParse(body);
@@ -167,6 +171,7 @@ export async function POST(request: NextRequest) {
         await tx.stockMovement.create({
           data: {
             productId: p.id,
+            createdById: ctx.dbUser.id,
             type: "IN",
             qty: data.stockQty,
             note: "رصيد افتتاحي",

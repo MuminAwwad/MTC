@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const { amount, note } = await req.json();
@@ -25,7 +29,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const newStatus = newTotalPaid >= Number(debt.amount) ? "PAID" : "PARTIAL";
 
     const updated = await prisma.$transaction(async (tx) => {
-      await tx.debtPayment.create({ data: { debtId: id, amount: payment, note: note || null } });
+      await tx.debtPayment.create({
+        data: { debtId: id, amount: payment, note: note || null, createdById: ctx.dbUser.id },
+      });
       const updatedDebt = await tx.debt.update({
         where: { id },
         data: { status: newStatus },
