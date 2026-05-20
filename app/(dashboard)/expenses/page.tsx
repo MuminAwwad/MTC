@@ -232,9 +232,44 @@ export default function ExpensesPage() {
       ) : expenses.length === 0 ? (
         <EmptyState icon={Wallet} title="لا توجد مصاريف" description="أضف أول مصروف للبدء" action={{ label: "مصروف جديد", onClick: () => setShowForm(true) }} />
       ) : (
-        <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <>
+          {/* Mobile: cards */}
+          <ul className="md:hidden space-y-2">
+            {expenses.map((exp) => (
+              <li key={exp.id} className="bg-white rounded-xl border border-[#e2e8f0] p-4">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="min-w-0">
+                    {exp.category && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#f1f5f9] text-[#64748b] mb-1">
+                        {exp.category.icon && <span>{exp.category.icon}</span>}
+                        {exp.category.name}
+                      </span>
+                    )}
+                    <p className="text-sm text-[#1e293b] break-words">{exp.description ?? "—"}</p>
+                    <p className="text-xs text-[#94a3b8] mt-1">{formatDate(exp.date)}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <span className="font-bold text-[#0b2345] ltr">
+                      {exp.currency === "ILS" ? "₪" : exp.currency === "USD" ? "$" : "JD"}
+                      {Number(exp.amount).toFixed(2)}
+                    </span>
+                    <button onClick={() => setDeleteId(exp.id)} className="text-[#94a3b8] hover:text-red-500">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+            <li className="bg-[#f8fafc] rounded-xl border border-[#e2e8f0] p-4 flex justify-between items-center">
+              <span className="text-sm font-semibold text-[#64748b]">الإجمالي (كل السجلات)</span>
+              <span className="font-bold text-[#0b2345] ltr">₪{totalAmount.toFixed(2)}</span>
+            </li>
+          </ul>
+
+          {/* Desktop: table */}
+          <div className="hidden md:block bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
               <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
                 <tr>
                   <th className="text-right px-4 py-3 font-medium text-[#64748b]">التاريخ</th>
@@ -277,8 +312,9 @@ export default function ExpensesPage() {
                 </tr>
               </tfoot>
             </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {totalPages > 1 && (

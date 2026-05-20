@@ -132,9 +132,63 @@ export default function DebtsPage() {
       ) : debts.length === 0 ? (
         <EmptyState icon={CreditCard} title="لا توجد ديون" description="لا توجد ديون مسجلة حاليًا" />
       ) : (
-        <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <>
+          {/* Mobile: cards */}
+          <ul className="md:hidden space-y-2">
+            {debts.map((d) => {
+              const paid = d.payments.reduce((s, p) => s + Number(p.amount), 0);
+              const remaining = Number(d.amount) - paid;
+              return (
+                <li key={d.id} className={`bg-white rounded-xl border p-4 ${isOverdue(d) ? "border-red-200 bg-red-50/40" : "border-[#e2e8f0]"}`}>
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <Link href={`/customers/${d.customer.id}`} className="font-semibold text-[#104e98] hover:underline min-w-0 break-words">
+                      {d.customer.name}
+                    </Link>
+                    <StatusBadge status={{ type: "debt", status: d.status }} />
+                  </div>
+                  {d.invoice ? (
+                    <Link href={`/invoices/${d.invoice.id}`} className="block text-xs text-[#104e98] hover:underline ltr mb-2">
+                      {d.invoice.invoiceNumber}
+                    </Link>
+                  ) : d.reason ? (
+                    <p className="text-xs text-[#64748b] mb-2">{d.reason}</p>
+                  ) : null}
+                  <dl className="grid grid-cols-3 gap-2 text-xs mb-3">
+                    <div>
+                      <dt className="text-[#64748b]">المبلغ</dt>
+                      <dd className="mt-0.5 font-medium ltr">₪{Number(d.amount).toFixed(2)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[#64748b]">المسدد</dt>
+                      <dd className="mt-0.5 text-green-600 ltr">{paid > 0 ? `₪${paid.toFixed(2)}` : "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[#64748b]">المتبقي</dt>
+                      <dd className="mt-0.5 text-orange-600 ltr">{remaining > 0 ? `₪${remaining.toFixed(2)}` : "—"}</dd>
+                    </div>
+                  </dl>
+                  <div className="flex items-center justify-between gap-2">
+                    {d.dueDate ? (
+                      <span className={`flex items-center gap-1 text-xs ${isOverdue(d) ? "text-red-600 font-medium" : "text-[#64748b]"}`}>
+                        {isOverdue(d) && <Clock className="h-3 w-3" />}
+                        {formatDate(d.dueDate)}
+                      </span>
+                    ) : <span />}
+                    {d.status !== "PAID" && (
+                      <Button size="sm" variant="outline" onClick={() => openPayment(d)}>
+                        تسجيل دفعة
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Desktop: table */}
+          <div className="hidden md:block bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
               <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
                 <tr>
                   <th className="text-right px-4 py-3 font-medium text-[#64748b]">العميل</th>
@@ -197,8 +251,9 @@ export default function DebtsPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {totalPages > 1 && (

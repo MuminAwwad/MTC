@@ -74,7 +74,35 @@ export default function SuppliersPage() {
           <EmptyState icon={Truck} title="لا يوجد موردون" description="ابدأ بإضافة أول مورد" />
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Mobile: cards */}
+            <ul className="md:hidden divide-y divide-[#f1f5f9]">
+              {suppliers.map((s) => (
+                <li key={s.id} className="p-4">
+                  <Link href={`/suppliers/${s.id}`} className="block font-semibold text-[#1e293b] hover:text-[#104e98] mb-1">
+                    {s.name}
+                  </Link>
+                  {s.company && <p className="text-xs text-[#64748b] mb-2">{s.company}</p>}
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    {s.phone ? (
+                      <a href={`tel:${s.phone}`} className="text-[#64748b] ltr">{s.phone}</a>
+                    ) : (
+                      <span className="text-[#94a3b8]">—</span>
+                    )}
+                    <div className="flex gap-1.5">
+                      <span className="bg-[#e8f0fc] text-[#104e98] px-2 py-0.5 rounded-full">
+                        {s._count.products} منتج
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full ${s._count.payables > 0 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}>
+                        {s._count.payables} مستحق
+                      </span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">

@@ -103,7 +103,38 @@ export default function MovementsPage() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Mobile: cards */}
+            <ul className="md:hidden divide-y divide-[#f1f5f9]">
+              {movements.length === 0 ? (
+                <li className="px-4 py-8 text-center text-[#64748b]">لا توجد حركات</li>
+              ) : (
+                movements.map((m) => (
+                  <li key={m.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {ICONS[m.type]}
+                        <span className={`text-xs font-medium ${COLORS[m.type]}`}>
+                          {STOCK_MOVEMENT_LABELS[m.type]}
+                        </span>
+                      </div>
+                      <span className={`font-bold ${COLORS[m.type]}`}>{m.qty}</span>
+                    </div>
+                    <Link href={`/inventory/${m.product.id}`} className="block text-sm font-medium text-[#1e293b] hover:text-[#104e98] mb-1">
+                      {m.product.name}
+                      {m.product.sku && <span className="text-xs text-[#94a3b8] mr-1 ltr">({m.product.sku})</span>}
+                    </Link>
+                    {m.note && <p className="text-xs text-[#64748b] mb-1">{m.note}</p>}
+                    <div className="flex items-center justify-between text-xs text-[#94a3b8]">
+                      <span>{m.createdBy?.name ?? "—"}</span>
+                      <span className="ltr">{formatDateTime(m.createdAt)}</span>
+                    </div>
+                  </li>
+                ))
+              )}
+            </ul>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">
