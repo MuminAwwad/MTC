@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
+import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
 
 const schema = z.object({
   type: z.enum(["IN", "OUT", "ADJUSTMENT"]),
@@ -27,48 +28,40 @@ export async function POST(
 
     const { type, qty, note } = parsed.data;
 
-    const product = await prisma.product.findFirst({
-      where: { id, isDeleted: false },
+    const result = await prisma.$transaction(async (tx) => {
+      const product = await tx.product.findFirst({
+        where: { id, isDeleted: false },
+        select: { id: true },
+      });
+      if (!product) throw new Error("PRODUCT_NOT_FOUND");
+
+      if (type === "OUT") {
+        await decrementStockOrFail(tx, id, qty);
+      } else if (type === "IN") {
+        await tx.product.update({
+          where: { id },
+          data: { stockQty: { increment: qty } },
+        });
+      } else {
+        // ADJUSTMENT: absolute set
+        await tx.product.update({ where: { id }, data: { stockQty: qty } });
+      }
+
+      const updated = await tx.product.findUnique({ where: { id }, select: { stockQty: true } });
+      const movement = await tx.stockMovement.create({
+        data: { productId: id, type, qty, note: note ?? null },
+      });
+      return { movement, newStockQty: updated?.stockQty ?? 0 };
     });
 
-    if (!product) {
+    return ok(result, { status: 201 });
+  } catch (error) {
+    if (error instanceof InsufficientStockError) {
+      return ok({ error: error.message }, { status: 409 });
+    }
+    if (error instanceof Error && error.message === "PRODUCT_NOT_FOUND") {
       return ok({ error: "المنتج غير موجود" }, { status: 404 });
     }
-
-    // Compute new stock
-    let newQty: number;
-    if (type === "IN") {
-      newQty = product.stockQty + qty;
-    } else if (type === "OUT") {
-      if (product.stockQty < qty) {
-        return ok(
-          { error: `الكمية المطلوبة (${qty}) أكبر من المخزون الحالي (${product.stockQty})` },
-          { status: 400 }
-        );
-      }
-      newQty = product.stockQty - qty;
-    } else {
-      // ADJUSTMENT: set absolute value
-      newQty = qty;
-    }
-
-    const [movement] = await prisma.$transaction([
-      prisma.stockMovement.create({
-        data: {
-          productId: id,
-          type,
-          qty,
-          note: note ?? null,
-        },
-      }),
-      prisma.product.update({
-        where: { id },
-        data: { stockQty: newQty },
-      }),
-    ]);
-
-    return ok({ movement, newStockQty: newQty }, { status: 201 });
-  } catch (error) {
     console.error("POST /api/products/[id]/stock", error);
     return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }

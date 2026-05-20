@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -45,22 +46,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
 
       if (productId) {
-        const product = await tx.product.findUnique({ where: { id: productId } });
-        if (product) {
-          await tx.product.update({
-            where: { id: productId },
-            data: { stockQty: Math.max(0, product.stockQty - qty) },
-          });
-          await tx.stockMovement.create({
-            data: {
-              productId,
-              type: "OUT",
-              qty,
-              note: `قطعة لتذكرة ${ticket.ticketNumber}`,
-              reference: ticket.ticketNumber,
-            },
-          });
-        }
+        await decrementStockOrFail(tx, productId, qty);
+        await tx.stockMovement.create({
+          data: {
+            productId,
+            type: "OUT",
+            qty,
+            note: `قطعة لتذكرة ${ticket.ticketNumber}`,
+            reference: ticket.ticketNumber,
+          },
+        });
       }
 
       return p;
@@ -68,6 +63,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     return ok(part, { status: 201 });
   } catch (e) {
+    if (e instanceof InsufficientStockError) {
+      return ok({ error: e.message }, { status: 409 });
+    }
     console.error(e);
     return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }

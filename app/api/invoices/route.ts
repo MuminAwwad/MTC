@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { generateInvoiceNumber } from "@/lib/invoice-number";
 import { InvoiceStatus } from "@prisma/client";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
+import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
 
 export async function GET(req: NextRequest) {
   try {
@@ -158,10 +159,7 @@ export async function POST(req: NextRequest) {
       if (invoiceStatus !== "DRAFT") {
         for (const item of items) {
           if (item.productId && item.qty > 0) {
-            const product = await tx.product.findUnique({ where: { id: item.productId } });
-            if (!product) continue;
-            const newQty = product.stockQty - item.qty;
-            await tx.product.update({ where: { id: item.productId }, data: { stockQty: Math.max(0, newQty) } });
+            await decrementStockOrFail(tx, item.productId, item.qty);
             await tx.stockMovement.create({
               data: {
                 productId: item.productId,
@@ -193,6 +191,9 @@ export async function POST(req: NextRequest) {
 
     return ok(invoice, { status: 201 });
   } catch (e) {
+    if (e instanceof InsufficientStockError) {
+      return ok({ error: e.message }, { status: 409 });
+    }
     console.error(e);
     return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
