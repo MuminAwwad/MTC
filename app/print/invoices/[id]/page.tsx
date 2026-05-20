@@ -183,18 +183,14 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
               <colgroup>
                 <col style={{ width: "5%" }} />
                 <col />
-                <col style={{ width: "10%" }} />
                 <col style={{ width: "15%" }} />
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "15%" }} />
+                <col style={{ width: "20%" }} />
               </colgroup>
               <thead>
                 <tr className="bg-orange-500 text-white">
                   <th className="text-right px-3 py-2.5 rounded-tr-lg">#</th>
                   <th className="text-right px-3 py-2.5">الصنف</th>
                   <th className="text-center px-3 py-2.5">الكمية</th>
-                  <th className="text-left px-3 py-2.5">سعر الوحدة</th>
-                  <th className="text-left px-3 py-2.5">الخصم</th>
                   <th className="text-left px-3 py-2.5 rounded-tl-lg">الإجمالي</th>
                 </tr>
               </thead>
@@ -207,17 +203,13 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
                       {item.source === "TICKET_LABOR" && <span className="text-xs text-[#94a3b8] mr-1">(أجور)</span>}
                     </td>
                     <td className="px-3 py-2.5 text-center">{item.qty}</td>
-                    <td className="px-3 py-2.5 ltr text-left">{currencySymbol}{Number(item.unitPrice).toFixed(2)}</td>
-                    <td className="px-3 py-2.5 ltr text-left text-red-500">
-                      {Number(item.discount) > 0 && `${currencySymbol}${Number(item.discount).toFixed(2)}`}
-                    </td>
                     <td className="px-3 py-2.5 ltr text-left font-medium">
                       {currencySymbol}{Number(item.total).toFixed(2)}
                     </td>
                   </tr>
                 ))}
                 <tr className="bg-orange-100 font-semibold">
-                  <td colSpan={5} className="px-3 py-2 text-right text-[#0b2345]">مجموع الصيانة</td>
+                  <td colSpan={3} className="px-3 py-2 text-right text-[#0b2345]">مجموع الصيانة</td>
                   <td className="px-3 py-2 ltr text-left text-[#0b2345]">{currencySymbol}{ticketSubtotal.toFixed(2)}</td>
                 </tr>
               </tbody>
