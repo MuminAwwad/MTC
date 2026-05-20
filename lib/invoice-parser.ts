@@ -64,9 +64,19 @@ type GroqMessage =
       >;
     };
 
-async function callGroq(model: string, messages: GroqMessage[]): Promise<ParsedInvoice> {
+async function callGroq(model: string, messages: GroqMessage[], opts?: { jsonMode?: boolean }): Promise<ParsedInvoice> {
   const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error("GROQ_API_KEY not set");
+  if (!apiKey) {
+    throw new Error("لم يتم ضبط GROQ_API_KEY في إعدادات البيئة");
+  }
+
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    temperature: 0,
+    max_tokens: 4096,
+  };
+  if (opts?.jsonMode) body.response_format = { type: "json_object" };
 
   const res = await fetch(GROQ_URL, {
     method: "POST",
@@ -74,22 +84,22 @@ async function callGroq(model: string, messages: GroqMessage[]): Promise<ParsedI
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0,
-      response_format: { type: "json_object" },
-      max_tokens: 4096,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const errBody = await res.text();
-    throw new Error(`Groq API error ${res.status}: ${errBody.slice(0, 400)}`);
+    let detail = errBody;
+    try {
+      const json = JSON.parse(errBody);
+      detail = json.error?.message ?? errBody;
+    } catch { /* keep raw */ }
+    throw new Error(`Groq ${res.status}: ${detail.slice(0, 400)}`);
   }
 
   const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
   const content = data.choices?.[0]?.message?.content ?? "";
+  if (!content.trim()) throw new Error("الموديل أعاد رد فارغ");
   const parsed = extractJson(content) as ParsedInvoice;
   parsed.supplier ??= { name: null, phone: null, company: null };
   parsed.items ??= [];
@@ -101,12 +111,13 @@ export async function parseInvoiceFromImage(
   base64: string,
   mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp"
 ): Promise<ParsedInvoice> {
+  // Vision models on Groq don't support a separate `system` role; bake the
+  // instructions into the user turn instead.
   return callGroq(VISION_MODEL, [
-    { role: "system", content: SYSTEM_PROMPT },
     {
       role: "user",
       content: [
-        { type: "text", text: "Extract this purchase invoice into the schema." },
+        { type: "text", text: `${SYSTEM_PROMPT}\n\nExtract the attached purchase invoice into the schema.` },
         { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64}` } },
       ],
     },
@@ -120,13 +131,17 @@ export async function parseInvoiceFromPdf(buffer: Buffer): Promise<ParsedInvoice
   const { text } = await parser.getText();
   await parser.destroy();
   if (!text.trim()) throw new Error("لم نتمكن من قراءة نص الفاتورة من ملف PDF");
-  return callGroq(TEXT_MODEL, [
-    { role: "system", content: SYSTEM_PROMPT },
-    {
-      role: "user",
-      content: `Below is the extracted text from a PDF purchase invoice. Extract it into the schema.\n\n${text}`,
-    },
-  ]);
+  return callGroq(
+    TEXT_MODEL,
+    [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: `Below is the extracted text from a PDF purchase invoice. Extract it into the schema.\n\n${text}`,
+      },
+    ],
+    { jsonMode: true }
+  );
 }
 
 export async function parseInvoiceFromXlsx(buffer: Buffer): Promise<ParsedInvoice> {
@@ -136,11 +151,15 @@ export async function parseInvoiceFromXlsx(buffer: Buffer): Promise<ParsedInvoic
     const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
     return `### Sheet: ${name}\n${csv}`;
   }).join("\n\n");
-  return callGroq(TEXT_MODEL, [
-    { role: "system", content: SYSTEM_PROMPT },
-    {
-      role: "user",
-      content: `Below is the content of an xlsx purchase invoice exported to CSV (one block per sheet). Extract it into the schema.\n\n${sheets}`,
-    },
-  ]);
+  return callGroq(
+    TEXT_MODEL,
+    [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: `Below is the content of an xlsx purchase invoice exported to CSV (one block per sheet). Extract it into the schema.\n\n${sheets}`,
+      },
+    ],
+    { jsonMode: true }
+  );
 }

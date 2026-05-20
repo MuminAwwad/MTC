@@ -55,10 +55,11 @@ export async function POST(req: NextRequest) {
     return ok(parsed);
   } catch (e) {
     console.error("POST /api/inventory/import/parse", e);
+    const detail = e instanceof Error ? e.message : String(e);
     const message =
       e instanceof SyntaxError
-        ? "تعذر تحليل الفاتورة. تأكد من جودة الصورة أو الملف"
-        : "فشل استخراج البيانات من الفاتورة";
+        ? `تعذر تحليل الفاتورة (ليست JSON صحيح): ${detail}`
+        : `فشل استخراج البيانات من الفاتورة: ${detail}`;
     return ok({ error: message }, { status: 500 });
   }
 }
