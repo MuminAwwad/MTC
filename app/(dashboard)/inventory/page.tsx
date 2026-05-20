@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Plus, LayoutGrid, List, AlertTriangle, Package } from "lucide-react";
+import { Plus, LayoutGrid, List, AlertTriangle, Package, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -110,9 +110,15 @@ export default function InventoryPage() {
         subtitle={`${meta.total} منتج`}
         breadcrumb={[{ label: "الرئيسية", href: "/dashboard" }, { label: "المخزون" }]}
         action={
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" asChild size="sm">
               <Link href="/inventory/movements">سجل الحركات</Link>
+            </Button>
+            <Button variant="outline" asChild size="sm">
+              <Link href="/inventory/import" className="gap-1.5">
+                <Sparkles className="h-4 w-4" />
+                استيراد فاتورة شراء
+              </Link>
             </Button>
             <Button asChild>
               <Link href="/inventory/new">
