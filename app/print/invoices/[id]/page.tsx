@@ -23,8 +23,12 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          body { margin: 0; }
-          @page { size: A4; margin: 15mm; }
+          body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          @page { size: A4; margin: 12mm; }
+          table { page-break-inside: auto; }
+          tr { page-break-inside: avoid; page-break-after: auto; }
+          thead { display: table-header-group; }
+          tfoot { display: table-footer-group; }
         }
         body { font-family: var(--font-arabic, 'IBM Plex Sans Arabic', sans-serif); }
       `}</style>
@@ -55,13 +59,17 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
       {/* A4 page */}
       <div className="max-w-[210mm] mx-auto p-8 min-h-screen">
         {/* Header */}
-        <div className="flex justify-between items-start mb-8 pb-6 border-b-2 border-[#104e98]">
-          <div>
-            <h1 className="text-2xl font-bold text-[#0b2345]">{SHOP_INFO.name}</h1>
-            <p className="text-sm text-[#64748b] mt-1">{SHOP_INFO.address}</p>
-            <p className="text-sm text-[#64748b] ltr">{SHOP_INFO.phone}</p>
+        <div className="flex justify-between items-start mb-8 pb-6 border-b-2 border-[#104e98] gap-6">
+          <div className="flex items-center gap-4 min-w-0">
+            <img src="/logo-blue.png" alt={SHOP_INFO.name} className="h-16 w-16 object-contain flex-shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-[#0b2345] leading-tight">{SHOP_INFO.name}</h1>
+              <p className="text-sm text-[#64748b] mt-1">{SHOP_INFO.address}</p>
+              <p className="text-sm text-[#64748b] ltr">{SHOP_INFO.phone}</p>
+            </div>
           </div>
-          <div className="text-left">
+          <div className="text-left flex-shrink-0">
+            <div className="text-xs uppercase tracking-wider text-[#94a3b8]">فاتورة</div>
             <div className="text-2xl font-bold text-[#104e98] ltr">{invoice.invoiceNumber}</div>
             <div className="text-sm text-[#64748b] mt-1">{formatDate(invoice.createdAt)}</div>
             <div className={`mt-2 inline-block px-3 py-1 rounded-full text-xs font-medium ${
@@ -87,7 +95,15 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
         </div>
 
         {/* Items */}
-        <table className="w-full text-sm mb-6">
+        <table className="w-full text-sm mb-6" style={{ tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: "5%" }} />
+            <col />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "15%" }} />
+          </colgroup>
           <thead>
             <tr className="bg-[#104e98] text-white">
               <th className="text-right px-3 py-2.5 rounded-tr-lg">#</th>
@@ -102,7 +118,7 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
             {invoice.items.map((item, i) => (
               <tr key={item.id} className={i % 2 === 0 ? "bg-white" : "bg-[#f8fafc]"}>
                 <td className="px-3 py-2.5 text-[#94a3b8]">{i + 1}</td>
-                <td className="px-3 py-2.5 font-medium text-[#1e293b]">
+                <td className="px-3 py-2.5 font-medium text-[#1e293b] break-words">
                   {item.name}
                   {item.product?.sku && <span className="text-xs text-[#94a3b8] mr-1 ltr">({item.product.sku})</span>}
                 </td>
@@ -120,7 +136,7 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
         </table>
 
         {/* Totals */}
-        <div className="flex justify-end mb-6">
+        <div className="flex justify-end mb-6" style={{ pageBreakInside: "avoid" }}>
           <dl className="w-64 space-y-1.5 text-sm">
             <div className="flex justify-between">
               <dt className="text-[#64748b]">المجموع الفرعي</dt>
