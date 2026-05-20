@@ -49,7 +49,7 @@ export default function RegisterPage() {
       }
 
       if (data.user) {
-        await fetch("/api/users", {
+        const res = await fetch("/api/users", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -60,6 +60,11 @@ export default function RegisterPage() {
             address: form.address || null,
           }),
         });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          setError(body.error ?? "تعذر إنشاء ملف المستخدم");
+          return;
+        }
       }
 
       setConfirmed(true);

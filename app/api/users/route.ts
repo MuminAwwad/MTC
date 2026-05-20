@@ -9,10 +9,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "البيانات ناقصة" }, { status: 400 });
     }
 
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { name, phone: phone ?? null, address: address ?? null },
-      create: { id, name, email, phone: phone ?? null, address: address ?? null, role: "STAFF" },
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    const existing = await prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+      select: { id: true, name: true, email: true },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        {
+          error: `مستخدم بنفس البريد الإلكتروني موجود مسبقًا: ${existing.name}`,
+          existingUserId: existing.id,
+        },
+        { status: 409 }
+      );
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        id,
+        name,
+        email: normalizedEmail,
+        phone: phone ?? null,
+        address: address ?? null,
+        role: "STAFF",
+      },
     });
 
     return NextResponse.json(user, { status: 201 });

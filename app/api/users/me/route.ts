@@ -25,7 +25,10 @@ export async function GET() {
     if (!authUser) return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
 
     const user = await prisma.user.findFirst({
-      where: { email: authUser.email!, isDeleted: false },
+      where: {
+        email: { equals: authUser.email!, mode: "insensitive" },
+        isDeleted: false,
+      },
       select: { id: true, name: true, email: true, phone: true, address: true, role: true, createdAt: true },
     });
 
@@ -45,8 +48,17 @@ export async function PUT(req: NextRequest) {
     const { name, phone, address } = await req.json();
     if (!name?.trim()) return NextResponse.json({ error: "الاسم مطلوب" }, { status: 400 });
 
+    const existing = await prisma.user.findFirst({
+      where: {
+        email: { equals: authUser.email!, mode: "insensitive" },
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+    if (!existing) return NextResponse.json({ error: "المستخدم غير موجود" }, { status: 404 });
+
     const user = await prisma.user.update({
-      where: { email: authUser.email! },
+      where: { id: existing.id },
       data: { name: name.trim(), phone: phone || null, address: address || null },
       select: { id: true, name: true, email: true, phone: true, address: true, role: true, createdAt: true },
     });
