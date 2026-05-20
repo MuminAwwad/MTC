@@ -236,7 +236,29 @@ export default function ProductDetailPage() {
             {product.stockMovements.length === 0 ? (
               <p className="text-center py-8 text-[#64748b] text-sm">لا توجد حركات مخزون</p>
             ) : (
-              <table className="w-full text-sm">
+              <>
+              {/* Mobile: cards */}
+              <ul className="md:hidden divide-y divide-[#f1f5f9]">
+                {product.stockMovements.map((m) => (
+                  <li key={m.id} className="p-4">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2">
+                        {m.type === "IN" ? <TrendingUp className="h-4 w-4 text-green-600" /> : m.type === "OUT" ? <TrendingDown className="h-4 w-4 text-red-600" /> : <Settings className="h-4 w-4 text-blue-600" />}
+                        <span className="text-sm">{STOCK_MOVEMENT_LABELS[m.type as StockMovementType]}</span>
+                      </div>
+                      <span className="font-bold">{m.qty}</span>
+                    </div>
+                    {m.note && <p className="text-xs text-[#64748b]">{m.note}</p>}
+                    <div className="flex items-center justify-between mt-1 text-xs text-[#94a3b8]">
+                      <span>{m.createdBy?.name ?? "—"}</span>
+                      <span className="ltr">{formatDateTime(m.createdAt)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop: table */}
+              <table className="hidden md:table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">
                     {["النوع", "الكمية", "ملاحظة", "المستخدم", "التاريخ"].map((h) => (
@@ -267,6 +289,7 @@ export default function ProductDetailPage() {
                   ))}
                 </tbody>
               </table>
+              </>
             )}
           </SectionCard>
         </TabsContent>
@@ -276,7 +299,28 @@ export default function ProductDetailPage() {
             {product.invoiceItems.length === 0 ? (
               <p className="text-center py-8 text-[#64748b] text-sm">لم يُباع هذا المنتج بعد</p>
             ) : (
-              <table className="w-full text-sm">
+              <>
+              {/* Mobile: cards */}
+              <ul className="md:hidden divide-y divide-[#f1f5f9]">
+                {product.invoiceItems.map((item) => (
+                  <li key={item.id} className="p-4">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <Link href={`/invoices/${item.invoice.invoiceNumber}`} className="text-[#104e98] hover:underline ltr font-medium text-sm">
+                        {item.invoice.invoiceNumber}
+                      </Link>
+                      <StatusBadge status={{ type: "invoice", status: item.invoice.status }} />
+                    </div>
+                    <p className="text-sm text-[#1e293b] mb-1">{item.invoice.customer.name}</p>
+                    <div className="flex items-center justify-between text-xs text-[#94a3b8]">
+                      <span>الكمية: <span className="font-medium text-[#1e293b]">{item.qty}</span> · <CurrencyDisplay amount={Number(item.unitPrice)} size="sm" /></span>
+                      <span className="ltr">{formatDate(item.invoice.createdAt)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop: table */}
+              <table className="hidden md:table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">
                     {["الفاتورة", "العميل", "الكمية", "السعر", "الحالة", "التاريخ"].map((h) => (
@@ -303,6 +347,7 @@ export default function ProductDetailPage() {
                   ))}
                 </tbody>
               </table>
+              </>
             )}
           </SectionCard>
         </TabsContent>

@@ -297,7 +297,40 @@ export default function CustomerDetailPage() {
                 description="لم يتم إنشاء أي فاتورة لهذا العميل بعد"
               />
             ) : (
-              <table className="w-full text-sm">
+              <>
+              {/* Mobile: cards */}
+              <ul className="md:hidden divide-y divide-[#f1f5f9]">
+                {customer.invoices.map((inv) => (
+                  <li key={inv.id} className="p-4">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <Link href={`/invoices/${inv.id}`} className="font-bold text-[#104e98] hover:underline ltr text-sm">
+                        {inv.invoiceNumber}
+                      </Link>
+                      <StatusBadge status={{ type: "invoice", status: inv.status }} />
+                    </div>
+                    <dl className="grid grid-cols-3 gap-2 text-xs mb-1">
+                      <div>
+                        <dt className="text-[#64748b]">الإجمالي</dt>
+                        <dd className="mt-0.5"><CurrencyDisplay amount={Number(inv.total)} size="sm" /></dd>
+                      </div>
+                      <div>
+                        <dt className="text-[#64748b]">المدفوع</dt>
+                        <dd className="mt-0.5"><CurrencyDisplay amount={Number(inv.paidAmount)} size="sm" className="text-green-600" /></dd>
+                      </div>
+                      <div>
+                        <dt className="text-[#64748b]">المتبقي</dt>
+                        <dd className="mt-0.5">
+                          <CurrencyDisplay amount={Number(inv.remainingAmount)} size="sm" className={Number(inv.remainingAmount) > 0 ? "text-red-600" : "text-[#94a3b8]"} />
+                        </dd>
+                      </div>
+                    </dl>
+                    <p className="text-xs text-[#94a3b8]">{formatDate(inv.createdAt)}</p>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop: table */}
+              <table className="hidden md:table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">
                     {["رقم الفاتورة", "الإجمالي", "المدفوع", "المتبقي", "الحالة", "التاريخ"].map((h) => (
@@ -334,6 +367,7 @@ export default function CustomerDetailPage() {
                   ))}
                 </tbody>
               </table>
+              </>
             )}
           </SectionCard>
         </TabsContent>
@@ -357,7 +391,38 @@ export default function CustomerDetailPage() {
                 description="لم يتم فتح أي تذكرة صيانة لهذا العميل"
               />
             ) : (
-              <table className="w-full text-sm">
+              <>
+              {/* Mobile: cards */}
+              <ul className="md:hidden divide-y divide-[#f1f5f9]">
+                {customer.tickets.map((t) => (
+                  <li key={t.id} className="p-4">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <Link href={`/maintenance/${t.id}`} className="font-bold text-[#104e98] hover:underline ltr text-sm">
+                        {t.ticketNumber}
+                      </Link>
+                      <StatusBadge status={{ type: "ticket", status: t.status }} />
+                    </div>
+                    <p className="text-sm text-[#1e293b]">{DEVICE_TYPE_LABELS[t.deviceType]}</p>
+                    {(t.deviceBrand || t.deviceModel) && (
+                      <p className="text-xs text-[#94a3b8]">{[t.deviceBrand, t.deviceModel].filter(Boolean).join(" ")}</p>
+                    )}
+                    <div className="flex items-center justify-between mt-2 text-xs">
+                      <StatusBadge status={{ type: "priority", status: t.priority }} />
+                      <div className="flex items-center gap-3 text-[#94a3b8]">
+                        {t.finalCost
+                          ? <CurrencyDisplay amount={Number(t.finalCost)} size="sm" />
+                          : t.estimatedCost
+                          ? <span>تقديري: <CurrencyDisplay amount={Number(t.estimatedCost)} size="sm" /></span>
+                          : null}
+                        <span>{formatDate(t.receivedAt)}</span>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop: table */}
+              <table className="hidden md:table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">
                     {["رقم التذكرة", "الجهاز", "الأولوية", "الحالة", "التكلفة", "تاريخ الاستلام"].map((h) => (
@@ -403,6 +468,7 @@ export default function CustomerDetailPage() {
                   ))}
                 </tbody>
               </table>
+              </>
             )}
           </SectionCard>
         </TabsContent>
@@ -417,7 +483,48 @@ export default function CustomerDetailPage() {
                 description="هذا العميل ليس عليه أي ديون مستحقة"
               />
             ) : (
-              <table className="w-full text-sm">
+              <>
+              {/* Mobile: cards */}
+              <ul className="md:hidden divide-y divide-[#f1f5f9]">
+                {customer.debts.map((d) => {
+                  const paid = d.payments.reduce((s, p) => s + Number(p.amount), 0);
+                  const remaining = Number(d.amount) - paid;
+                  const isOverdue = d.dueDate && new Date(d.dueDate) < new Date() && d.status !== "PAID";
+                  return (
+                    <li key={d.id} className="p-4">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <Link href={`/debts/${d.id}`} className="font-medium text-[#1e293b] hover:text-[#104e98] min-w-0 break-words">
+                          {d.reason ?? (d.invoice ? `فاتورة ${d.invoice.invoiceNumber}` : "دين")}
+                        </Link>
+                        <StatusBadge status={{ type: "debt", status: d.status }} />
+                      </div>
+                      <dl className="grid grid-cols-3 gap-2 text-xs mb-2">
+                        <div>
+                          <dt className="text-[#64748b]">المبلغ</dt>
+                          <dd className="mt-0.5"><CurrencyDisplay amount={Number(d.amount)} size="sm" /></dd>
+                        </div>
+                        <div>
+                          <dt className="text-[#64748b]">المدفوع</dt>
+                          <dd className="mt-0.5"><CurrencyDisplay amount={paid} size="sm" className="text-green-600" /></dd>
+                        </div>
+                        <div>
+                          <dt className="text-[#64748b]">المتبقي</dt>
+                          <dd className="mt-0.5"><CurrencyDisplay amount={remaining} size="sm" className={remaining > 0 ? "text-red-600 font-semibold" : "text-[#94a3b8]"} /></dd>
+                        </div>
+                      </dl>
+                      {d.dueDate && (
+                        <p className={`text-xs ${isOverdue ? "text-red-600 font-medium" : "text-[#94a3b8]"}`}>
+                          {isOverdue && <Clock className="inline h-3 w-3 ml-1" />}
+                          استحقاق: {formatDate(d.dueDate)}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {/* Desktop: table */}
+              <table className="hidden md:table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">
                     {["السبب", "المبلغ الأصلي", "المدفوع", "المتبقي", "الحالة", "تاريخ الاستحقاق"].map((h) => (
@@ -474,6 +581,7 @@ export default function CustomerDetailPage() {
                   })}
                 </tbody>
               </table>
+              </>
             )}
           </SectionCard>
         </TabsContent>

@@ -137,7 +137,35 @@ export default function SupplierDetailPage() {
             {supplier.products.length === 0 ? (
               <p className="text-center py-8 text-[#64748b] text-sm">لا توجد منتجات لهذا المورد</p>
             ) : (
-              <table className="w-full text-sm">
+              <>
+              {/* Mobile: cards */}
+              <ul className="md:hidden divide-y divide-[#f1f5f9]">
+                {supplier.products.map((p) => (
+                  <li key={p.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <Link href={`/inventory/${p.id}`} className="font-medium text-[#1e293b] hover:text-[#104e98] min-w-0 break-words">{p.name}</Link>
+                      <StatusBadge status={{ type: "custom", label: p.isActive ? "نشط" : "غير نشط", color: p.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600" }} />
+                    </div>
+                    <dl className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <dt className="text-[#64748b]">التكلفة</dt>
+                        <dd className="mt-0.5"><CurrencyDisplay amount={Number(p.costPrice)} size="sm" /></dd>
+                      </div>
+                      <div>
+                        <dt className="text-[#64748b]">البيع</dt>
+                        <dd className="mt-0.5"><CurrencyDisplay amount={Number(p.sellPrice)} size="sm" /></dd>
+                      </div>
+                      <div>
+                        <dt className="text-[#64748b]">المخزون</dt>
+                        <dd className="mt-0.5 font-medium">{p.stockQty}</dd>
+                      </div>
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop: table */}
+              <table className="hidden md:table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">
                     {["المنتج", "سعر التكلفة", "سعر البيع", "المخزون", "الحالة"].map((h) => (
@@ -161,6 +189,7 @@ export default function SupplierDetailPage() {
                   ))}
                 </tbody>
               </table>
+              </>
             )}
           </SectionCard>
         </TabsContent>
@@ -170,7 +199,40 @@ export default function SupplierDetailPage() {
             {supplier.payables.length === 0 ? (
               <p className="text-center py-8 text-[#64748b] text-sm">لا توجد مستحقات</p>
             ) : (
-              <table className="w-full text-sm">
+              <>
+              {/* Mobile: cards */}
+              <ul className="md:hidden divide-y divide-[#f1f5f9]">
+                {supplier.payables.map((p) => {
+                  const paid = p.payments.reduce((s, pay) => s + Number(pay.amount), 0);
+                  const remaining = Number(p.amount) - paid;
+                  return (
+                    <li key={p.id} className="p-4">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p className="font-medium text-[#1e293b] min-w-0 break-words">{p.reason ?? "—"}</p>
+                        <StatusBadge status={{ type: "debt", status: p.status }} />
+                      </div>
+                      <dl className="grid grid-cols-3 gap-2 text-xs mb-2">
+                        <div>
+                          <dt className="text-[#64748b]">المبلغ</dt>
+                          <dd className="mt-0.5"><CurrencyDisplay amount={Number(p.amount)} size="sm" /></dd>
+                        </div>
+                        <div>
+                          <dt className="text-[#64748b]">المدفوع</dt>
+                          <dd className="mt-0.5"><CurrencyDisplay amount={paid} size="sm" className="text-green-600" /></dd>
+                        </div>
+                        <div>
+                          <dt className="text-[#64748b]">المتبقي</dt>
+                          <dd className="mt-0.5"><CurrencyDisplay amount={remaining} size="sm" className="text-red-600" /></dd>
+                        </div>
+                      </dl>
+                      {p.dueDate && <p className="text-xs text-[#94a3b8]">استحقاق: {formatDate(p.dueDate)}</p>}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {/* Desktop: table */}
+              <table className="hidden md:table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">
                     {["السبب", "المبلغ", "المدفوع", "المتبقي", "الحالة", "تاريخ الاستحقاق"].map((h) => (
@@ -195,6 +257,7 @@ export default function SupplierDetailPage() {
                   })}
                 </tbody>
               </table>
+              </>
             )}
           </SectionCard>
         </TabsContent>

@@ -143,7 +143,7 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </SectionCard>
             <SectionCard title="أفضل العملاء">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto -mx-2 sm:mx-0 px-2 sm:px-0"><table className="w-full text-sm min-w-[420px]">
                 <thead>
                   <tr className="text-right border-b border-[#f1f5f9]">
                     <th className="pb-2 font-medium text-[#64748b]">#</th>
@@ -164,7 +164,7 @@ export default function ReportsPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </SectionCard>
           </div>
         );
@@ -186,7 +186,7 @@ export default function ReportsPage() {
             </div>
             {d.lowStock.length > 0 && (
               <SectionCard title={`منتجات تحت الحد الأدنى (${d.lowStock.length})`}>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto -mx-2 sm:mx-0 px-2 sm:px-0"><table className="w-full text-sm min-w-[420px]">
                   <thead>
                     <tr className="text-right border-b border-[#f1f5f9]">
                       <th className="pb-2 font-medium text-[#64748b]">المنتج</th>
@@ -208,7 +208,7 @@ export default function ReportsPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </SectionCard>
             )}
           </div>
@@ -237,7 +237,7 @@ export default function ReportsPage() {
               ))}
             </div>
             <SectionCard title={`الديون المعلقة — إجمالي ₪${d.totalOutstanding.toFixed(2)}`}>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto -mx-2 sm:mx-0 px-2 sm:px-0"><table className="w-full text-sm min-w-[420px]">
                 <thead>
                   <tr className="text-right border-b border-[#f1f5f9]">
                     <th className="pb-2 font-medium text-[#64748b]">العميل</th>
@@ -265,7 +265,7 @@ export default function ReportsPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </SectionCard>
           </div>
         );
