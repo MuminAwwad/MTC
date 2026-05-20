@@ -31,17 +31,19 @@ const SYSTEM_PROMPT = `You read purchase invoices for an electronics shop in Pal
 
 Rules:
 - Default currency to "ILS" (₪ شيكل) if not stated.
-- unitCost is the per-unit cost the shop paid (NOT the sale price).
-- For each line item infer qty (default 1) and unitCost; if the line shows a line total split it: unitCost = total / qty.
-- Skip header rows, subtotals, totals, taxes, discounts, footers — items only.
-- Keep the item name in its original language (Arabic or English).
+- unitCost is the per-unit cost the shop paid (NOT the sale price, NOT the line total). It is what one piece of the item cost.
+- For each line item, find these three numbers on the row: qty, unitCost, and line total. If the row shows all three, use the unitCost column directly. If only qty and line total are shown, set unitCost = lineTotal / qty. If only a single price is shown with qty 1, that price is the unitCost.
+- Numbers can use Arabic-Indic digits (٠١٢٣٤٥٦٧٨٩); convert to standard digits.
+- Skip header rows, subtotals, totals, taxes/VAT, discounts, shipping, and footers — only return actual item rows.
+- Keep item names in their original language (Arabic or English). Do not translate.
 - supplier.name is the seller/issuer of the invoice. supplier.phone is the seller's phone, not the buyer's.
 - invoiceDate must be ISO YYYY-MM-DD.
 - If a value is unknown or absent, set it to null. Never invent.
-- Respond with the JSON object only — no markdown fences, no commentary.`;
+- Sanity check: sum(qty * unitCost) over your items should be close to the printed invoice subtotal/total. If your numbers are an order of magnitude off, re-check whether you mistook a line total for unitCost or vice versa.
+- Respond with the JSON object only — no markdown fences, no commentary, no reasoning blocks before/after.`;
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const VISION_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct";
 const TEXT_MODEL = "llama-3.3-70b-versatile";
 
 function extractJson(text: string): unknown {
@@ -126,9 +128,29 @@ export async function parseInvoiceFromImage(
 
 export async function parseInvoiceFromPdf(buffer: Buffer): Promise<ParsedInvoice> {
   // Dynamic import — unpdf bundles pdfjs-dist with serverless-friendly shims
-  const { extractText } = await import("unpdf");
-  const { text } = await extractText(new Uint8Array(buffer), { mergePages: true });
-  const merged = Array.isArray(text) ? text.join("\n") : text;
+  const { extractTextItems } = await import("unpdf");
+  const { items } = await extractTextItems(new Uint8Array(buffer));
+  // Rebuild reading order: per page, group items by y-bucket (rows), then
+  // sort within each row by x. This preserves invoice tables which `extractText`
+  // mangles by emitting cells in PDF-internal order.
+  const pages = items.map((pageItems, pageIdx) => {
+    const filtered = pageItems.filter((it) => it.str.trim());
+    if (filtered.length === 0) return `### Page ${pageIdx + 1}\n(empty)`;
+    const yTolerance = Math.max(2, (filtered[0]?.height ?? 10) * 0.5);
+    const rows: Array<{ y: number; items: typeof filtered }> = [];
+    for (const it of filtered) {
+      const row = rows.find((r) => Math.abs(r.y - it.y) <= yTolerance);
+      if (row) row.items.push(it);
+      else rows.push({ y: it.y, items: [it] });
+    }
+    rows.sort((a, b) => b.y - a.y); // top → bottom (PDF y origin is bottom-left)
+    const lines = rows.map((row) => {
+      const sorted = [...row.items].sort((a, b) => a.x - b.x);
+      return sorted.map((it) => it.str).join("  ");
+    });
+    return `### Page ${pageIdx + 1}\n${lines.join("\n")}`;
+  });
+  const merged = pages.join("\n\n");
   if (!merged.trim()) throw new Error("لم نتمكن من قراءة نص الفاتورة من ملف PDF (قد يكون ممسوحًا ضوئيًا — جرّب رفعه كصورة)");
   return callGroq(
     TEXT_MODEL,
@@ -136,7 +158,7 @@ export async function parseInvoiceFromPdf(buffer: Buffer): Promise<ParsedInvoice
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
-        content: `Below is the extracted text from a PDF purchase invoice. Extract it into the schema.\n\n${merged}`,
+        content: `Below is text extracted from a PDF purchase invoice with the original spatial layout preserved (each line of text corresponds to a row on the page; consecutive items separated by spaces are columns within that row). Extract it into the schema.\n\n${merged}`,
       },
     ],
     { jsonMode: true }
