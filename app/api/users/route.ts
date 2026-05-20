@@ -1,9 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth";
+
+export async function GET() {
+  const ctx = await requireAdmin();
+  if (ctx instanceof NextResponse) return ctx;
+
+  const users = await prisma.user.findMany({
+    where: { isDeleted: false },
+    select: { id: true, name: true, email: true, phone: true, role: true, isActive: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return NextResponse.json(users);
+}
 
 export async function POST(req: NextRequest) {
+  const ctx = await requireAdmin();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
-    const { id, name, email, phone, address } = await req.json();
+    const { id, name, email, phone, address, role } = await req.json();
 
     if (!id || !name || !email) {
       return NextResponse.json({ error: "البيانات ناقصة" }, { status: 400 });
@@ -33,7 +49,7 @@ export async function POST(req: NextRequest) {
         email: normalizedEmail,
         phone: phone ?? null,
         address: address ?? null,
-        role: "STAFF",
+        role: role === "ADMIN" ? "ADMIN" : "STAFF",
       },
     });
 

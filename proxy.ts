@@ -37,8 +37,13 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/reset-password");
   const isApiRoute = pathname.startsWith("/api");
 
-  if (!user && !isAuthPage && !isApiRoute) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  if (!user) {
+    if (isApiRoute) {
+      return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
+    }
+    if (!isAuthPage) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
   }
 
   if (user && isAuthPage) {

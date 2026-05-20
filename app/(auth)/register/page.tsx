@@ -33,10 +33,16 @@ export default function RegisterPage() {
     try {
       const supabase = createClient();
 
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
-        options: { data: { name: form.name } },
+        options: {
+          data: {
+            name: form.name,
+            phone: form.phone || null,
+            address: form.address || null,
+          },
+        },
       });
 
       if (signUpError) {
@@ -46,25 +52,6 @@ export default function RegisterPage() {
           setError(signUpError.message || "حدث خطأ أثناء إنشاء الحساب");
         }
         return;
-      }
-
-      if (data.user) {
-        const res = await fetch("/api/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: data.user.id,
-            name: form.name,
-            email: form.email,
-            phone: form.phone || null,
-            address: form.address || null,
-          }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          setError(body.error ?? "تعذر إنشاء ملف المستخدم");
-          return;
-        }
       }
 
       setConfirmed(true);
