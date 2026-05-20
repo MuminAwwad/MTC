@@ -216,6 +216,12 @@ model Invoice {
   createdById String?
   createdBy   User?   @relation("InvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
+  // One-to-one link to a maintenance ticket when this invoice was
+  // generated from a repair. Lets us auto-transition the ticket to
+  // DELIVERED when the invoice is issued, and prevents double-billing.
+  ticketId String? @unique
+  ticket   MaintenanceTicket? @relation("TicketInvoice", fields: [ticketId], references: [id], onDelete: SetNull)
+
   debts       Debt[]
 }
 
@@ -275,6 +281,7 @@ model MaintenanceTicket {
 
   parts    TicketPart[]
   timeline TicketUpdate[]
+  invoice  Invoice?       @relation("TicketInvoice")
 }
 
 // ─── TicketPart ───────────────────────────────────────────────────────────────

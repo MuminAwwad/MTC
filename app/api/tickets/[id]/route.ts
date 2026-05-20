@@ -23,6 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         parts: { include: { product: { select: { id: true, name: true, sku: true } } }, orderBy: { createdAt: "asc" } },
         timeline: { include: { createdBy: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
         createdBy: { select: { id: true, name: true } },
+        invoice: { select: { id: true, invoiceNumber: true, status: true } },
       },
     });
     if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });

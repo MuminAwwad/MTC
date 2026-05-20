@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   Printer, ChevronLeft, ChevronRight, Plus, Trash2,
-  CheckCircle2, Clock, Package, MessageSquare,
+  CheckCircle2, Clock, Package, MessageSquare, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,7 @@ interface TicketDetail {
   customer: { id: string; name: string; phone: string | null; address: string | null };
   parts: TicketPart[];
   timeline: TimelineEntry[];
+  invoice: { id: string; invoiceNumber: string; status: string } | null;
 }
 
 const NEXT_STATUSES: Record<TicketStatus, TicketStatus[]> = {
@@ -243,10 +244,25 @@ export default function TicketDetailPage() {
           { label: ticket.ticketNumber },
         ]}
         action={
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Link href={`/print/tickets/${id}`} target="_blank">
               <Button variant="outline" className="gap-2"><Printer className="h-4 w-4" />وصل استلام</Button>
             </Link>
+            {ticket.invoice ? (
+              <Link href={`/invoices/${ticket.invoice.id}`}>
+                <Button variant="outline" className="gap-2">
+                  <FileText className="h-4 w-4" />
+                  الفاتورة <span className="ltr">{ticket.invoice.invoiceNumber}</span>
+                </Button>
+              </Link>
+            ) : (ticket.status === "READY" || ticket.status === "DELIVERED") ? (
+              <Link href={`/invoices/new?ticketId=${id}`}>
+                <Button className="gap-2">
+                  <FileText className="h-4 w-4" />
+                  إنشاء فاتورة
+                </Button>
+              </Link>
+            ) : null}
           </div>
         }
       />

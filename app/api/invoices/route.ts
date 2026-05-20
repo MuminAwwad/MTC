@@ -92,10 +92,24 @@ export async function POST(req: NextRequest) {
       notes,
       status = "DRAFT",
       paidAmount = 0,
+      ticketId,
     } = body;
 
     if (!customerId) return ok({ error: "العميل مطلوب" }, { status: 400 });
     if (!items || items.length === 0) return ok({ error: "يجب إضافة منتج واحد على الأقل" }, { status: 400 });
+
+    if (ticketId) {
+      const existing = await prisma.invoice.findUnique({
+        where: { ticketId },
+        select: { id: true, invoiceNumber: true },
+      });
+      if (existing) {
+        return ok(
+          { error: `هذه التذكرة مرتبطة بفاتورة مسبقًا: ${existing.invoiceNumber}`, existingInvoiceId: existing.id },
+          { status: 409 }
+        );
+      }
+    }
 
     const subtotal = items.reduce((sum: number, item: { qty: number; unitPrice: number; discount: number }) => {
       const lineTotal = item.qty * item.unitPrice - (item.discount ?? 0);
@@ -126,6 +140,7 @@ export async function POST(req: NextRequest) {
           invoiceNumber,
           customerId,
           createdById: ctx.dbUser.id,
+          ticketId: ticketId ?? null,
           subtotal,
           discountAmount: discAmt,
           discountPercent,
@@ -187,6 +202,23 @@ export async function POST(req: NextRequest) {
               currency,
               reason: `فاتورة ${invoiceNumber}`,
               status: "PENDING",
+            },
+          });
+        }
+
+        // If this invoice was generated from a repair ticket, mark
+        // the ticket DELIVERED once the invoice is issued.
+        if (ticketId) {
+          await tx.maintenanceTicket.update({
+            where: { id: ticketId },
+            data: { status: "DELIVERED", deliveredAt: new Date() },
+          });
+          await tx.ticketUpdate.create({
+            data: {
+              ticketId,
+              status: "DELIVERED",
+              note: `تم التسليم وإصدار الفاتورة ${invoiceNumber}`,
+              createdById: ctx.dbUser.id,
             },
           });
         }

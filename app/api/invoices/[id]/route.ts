@@ -86,6 +86,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             },
           });
         }
+
+        if (invoice.ticketId) {
+          await tx.maintenanceTicket.update({
+            where: { id: invoice.ticketId },
+            data: { status: "DELIVERED", deliveredAt: new Date() },
+          });
+          await tx.ticketUpdate.create({
+            data: {
+              ticketId: invoice.ticketId,
+              status: "DELIVERED",
+              note: `تم التسليم وإصدار الفاتورة ${invoice.invoiceNumber}`,
+              createdById: ctx.dbUser.id,
+            },
+          });
+        }
       }
 
       if (newStatus === "CANCELLED" && invoice.status !== "DRAFT") {

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, Suspense } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +29,7 @@ function NewInvoiceForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialCustomer = searchParams.get("customerId") ?? "";
+  const ticketId = searchParams.get("ticketId") ?? "";
 
   const [customerId, setCustomerId] = useState(initialCustomer);
   const [items, setItems] = useState<LineItem[]>([newItem()]);
@@ -40,6 +41,50 @@ function NewInvoiceForm() {
   const [paidAmount, setPaidAmount] = useState(0);
   const [loading, setLoading] = useState<"draft" | "issue" | null>(null);
   const [error, setError] = useState("");
+  const [ticketNumber, setTicketNumber] = useState("");
+  const [ticketLoading, setTicketLoading] = useState(!!ticketId);
+
+  useEffect(() => {
+    if (!ticketId) return;
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(`/api/tickets/${ticketId}`);
+      if (!res.ok || cancelled) { setTicketLoading(false); return; }
+      const t = await res.json();
+      setTicketNumber(t.ticketNumber);
+      setCustomerId(t.customer.id);
+      const parts: { name: string; productId?: string | null; qty: number; unitCost: number }[] = t.parts ?? [];
+      const partsTotal = parts.reduce((s, p) => s + p.qty * Number(p.unitCost), 0);
+      const finalCost = Number(t.finalCost ?? 0);
+      const deposit = Number(t.depositPaid ?? 0);
+      const laborCost = Math.max(0, finalCost - partsTotal);
+      const lines: LineItem[] = [
+        ...parts.map((p) => ({
+          id: `item-${++itemCounter}`,
+          productId: p.productId ?? "",
+          name: p.name,
+          qty: p.qty,
+          unitPrice: Number(p.unitCost),
+          discount: 0,
+        })),
+      ];
+      if (laborCost > 0 || lines.length === 0) {
+        lines.push({
+          id: `item-${++itemCounter}`,
+          productId: "",
+          name: `أجور صيانة (${t.ticketNumber})`,
+          qty: 1,
+          unitPrice: laborCost,
+          discount: 0,
+        });
+      }
+      setItems(lines);
+      setPaidAmount(deposit);
+      setNotes(`فاتورة صيانة ${t.ticketNumber}`);
+      setTicketLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [ticketId]);
 
   const updateItem = useCallback((id: string, field: keyof LineItem, value: string | number) => {
     setItems((prev) =>
@@ -99,6 +144,7 @@ function NewInvoiceForm() {
           notes,
           status,
           paidAmount,
+          ticketId: ticketId || undefined,
         }),
       });
       const data = await res.json();
@@ -114,13 +160,24 @@ function NewInvoiceForm() {
   return (
     <div className="max-w-4xl space-y-6">
       <PageHeader
-        title="فاتورة جديدة"
+        title={ticketNumber ? `فاتورة من تذكرة ${ticketNumber}` : "فاتورة جديدة"}
         breadcrumb={[
           { label: "الرئيسية", href: "/dashboard" },
           { label: "الفواتير", href: "/invoices" },
           { label: "فاتورة جديدة" },
         ]}
       />
+
+      {ticketId && (
+        <div className="flex items-center gap-2 text-sm bg-orange-50 border border-orange-200 text-orange-700 rounded-lg px-3 py-2">
+          <Wrench className="h-4 w-4 flex-shrink-0" />
+          <span>
+            {ticketLoading
+              ? "جاري تحميل بيانات التذكرة..."
+              : `تم تعبئة القطع والأجور من التذكرة. إصدار الفاتورة سيُسلِّم التذكرة تلقائيًا.`}
+          </span>
+        </div>
+      )}
 
       {/* Customer + Currency */}
       <SectionCard title="بيانات الفاتورة">
