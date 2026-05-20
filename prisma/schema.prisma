@@ -405,7 +405,7 @@ model Expense {
 
 model ExpenseCategory {
   id    String @id @default(cuid())
-  name  String
+  name  String @unique
   icon  String?
   color String?
 

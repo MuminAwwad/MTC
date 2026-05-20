@@ -15,6 +15,7 @@ export default function SettingsPage() {
   const [newCatIcon, setNewCatIcon] = useState("");
   const [savingCat, setSavingCat] = useState(false);
   const [catMsg, setCatMsg] = useState("");
+  const [catError, setCatError] = useState("");
   const [deletingCat, setDeletingCat] = useState("");
 
   useEffect(() => {
@@ -25,18 +26,21 @@ export default function SettingsPage() {
     e.preventDefault();
     if (!newCatName.trim()) return;
     setSavingCat(true);
+    setCatError("");
     const res = await fetch("/api/expense-categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newCatName, icon: newCatIcon || undefined }),
     });
+    const data = await res.json();
     if (res.ok) {
-      const cat = await res.json();
-      setCategories((c) => [...c, cat]);
+      setCategories((c) => [...c, data]);
       setNewCatName("");
       setNewCatIcon("");
       setCatMsg("تمت الإضافة");
       setTimeout(() => setCatMsg(""), 2000);
+    } else {
+      setCatError(data.error ?? "حدث خطأ");
     }
     setSavingCat(false);
   };
@@ -106,6 +110,7 @@ export default function SettingsPage() {
           </Button>
         </form>
         {catMsg && <p className="text-xs text-green-600 mt-2">{catMsg}</p>}
+        {catError && <p className="text-xs text-red-600 mt-2">{catError}</p>}
       </SectionCard>
 
       {/* System info */}

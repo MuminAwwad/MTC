@@ -17,9 +17,28 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const { name, icon, color } = await req.json();
-    if (!name?.trim()) return NextResponse.json({ error: "الاسم مطلوب" }, { status: 400 });
+    const normalized = name?.trim();
+    if (!normalized) return NextResponse.json({ error: "الاسم مطلوب" }, { status: 400 });
+
+    const existing = await prisma.expenseCategory.findFirst({
+      where: {
+        name: { equals: normalized, mode: "insensitive" },
+        isDeleted: false,
+      },
+      select: { id: true, name: true },
+    });
+    if (existing) {
+      return NextResponse.json(
+        {
+          error: `فئة بنفس الاسم موجودة مسبقًا: ${existing.name}`,
+          existingCategoryId: existing.id,
+        },
+        { status: 409 }
+      );
+    }
+
     const cat = await prisma.expenseCategory.create({
-      data: { name: name.trim(), icon: icon || null, color: color || null },
+      data: { name: normalized, icon: icon || null, color: color || null },
     });
     return NextResponse.json(cat, { status: 201 });
   } catch (e) {
