@@ -241,7 +241,6 @@ export default function ExpensesPage() {
                   <div className="min-w-0">
                     {exp.category && (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#f1f5f9] text-[#64748b] mb-1">
-                        {exp.category.icon && <span>{exp.category.icon}</span>}
                         {exp.category.name}
                       </span>
                     )}

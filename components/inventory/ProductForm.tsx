@@ -38,7 +38,6 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [newCatOpen, setNewCatOpen] = useState(false);
   const [newCatName, setNewCatName] = useState("");
-  const [newCatIcon, setNewCatIcon] = useState("");
   const [newCatSaving, setNewCatSaving] = useState(false);
   const [newCatError, setNewCatError] = useState("");
 
@@ -50,14 +49,13 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
       const res = await fetch("/api/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon || undefined }),
+        body: JSON.stringify({ name: newCatName.trim() }),
       });
       const data = await res.json();
       if (!res.ok) { setNewCatError(data.error ?? "تعذر إنشاء الفئة"); return; }
       setCategories((cs) => [...cs, data]);
       setForm((f) => ({ ...f, categoryId: data.id }));
       setNewCatName("");
-      setNewCatIcon("");
       setNewCatOpen(false);
     } catch {
       setNewCatError("خطأ في الاتصال");
@@ -183,7 +181,7 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
                     <SelectItem value="__none__">بدون فئة</SelectItem>
                     {categories.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
-                        {c.icon ? `${c.icon} ${c.name}` : c.name}
+                        {c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -395,14 +393,6 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
                 onChange={(e) => setNewCatName(e.target.value)}
                 placeholder="مثال: شواحن، حافظات..."
                 autoFocus
-              />
-            </FormField>
-            <FormField label="أيقونة (إيموجي)">
-              <Input
-                value={newCatIcon}
-                onChange={(e) => setNewCatIcon(e.target.value)}
-                placeholder="🔌"
-                className="w-20 text-center"
               />
             </FormField>
             {newCatError && (

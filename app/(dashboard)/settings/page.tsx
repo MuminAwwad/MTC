@@ -12,7 +12,6 @@ interface ExpenseCategory { id: string; name: string; icon: string | null }
 export default function SettingsPage() {
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [newCatName, setNewCatName] = useState("");
-  const [newCatIcon, setNewCatIcon] = useState("");
   const [savingCat, setSavingCat] = useState(false);
   const [catMsg, setCatMsg] = useState("");
   const [catError, setCatError] = useState("");
@@ -30,13 +29,12 @@ export default function SettingsPage() {
     const res = await fetch("/api/expense-categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newCatName, icon: newCatIcon || undefined }),
+      body: JSON.stringify({ name: newCatName }),
     });
     const data = await res.json();
     if (res.ok) {
       setCategories((c) => [...c, data]);
       setNewCatName("");
-      setNewCatIcon("");
       setCatMsg("تمت الإضافة");
       setTimeout(() => setCatMsg(""), 2000);
     } else {
@@ -79,10 +77,7 @@ export default function SettingsPage() {
             <ul className="divide-y divide-[#f1f5f9]">
               {categories.map((cat) => (
                 <li key={cat.id} className="flex items-center justify-between py-2.5 text-sm">
-                  <span className="flex items-center gap-2">
-                    {cat.icon && <span className="text-base">{cat.icon}</span>}
-                    <span className="font-medium text-[#1e293b]">{cat.name}</span>
-                  </span>
+                  <span className="font-medium text-[#1e293b]">{cat.name}</span>
                 </li>
               ))}
             </ul>
@@ -95,14 +90,6 @@ export default function SettingsPage() {
               value={newCatName}
               onChange={(e) => setNewCatName(e.target.value)}
               placeholder="مثال: إيجار، كهرباء..."
-            />
-          </FormField>
-          <FormField label="أيقونة (إيموجي)">
-            <Input
-              value={newCatIcon}
-              onChange={(e) => setNewCatIcon(e.target.value)}
-              placeholder="🏠"
-              className="w-20 text-center"
             />
           </FormField>
           <Button type="submit" disabled={savingCat || !newCatName.trim()} className="mb-0">

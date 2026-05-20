@@ -10,6 +10,7 @@ import {
   TrendingDown,
   Settings,
   Package,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -154,8 +155,9 @@ export default function ProductDetailPage() {
                     حد التنبيه: {product.minStockQty}
                   </p>
                   {isLow && (
-                    <p className="text-xs text-red-600 font-medium mt-1">
-                      ⚠ المخزون منخفض
+                    <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      المخزون منخفض
                     </p>
                   )}
                 </div>

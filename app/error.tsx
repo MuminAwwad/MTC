@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { AlertTriangle } from "lucide-react";
 
 export default function GlobalError({
   error,
@@ -14,7 +15,9 @@ export default function GlobalError({
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]" dir="rtl">
       <div className="text-center px-4">
-        <div className="text-6xl mb-4">⚠️</div>
+        <div className="inline-flex p-4 bg-red-50 rounded-full mb-4">
+          <AlertTriangle className="h-10 w-10 text-red-500" />
+        </div>
         <h1 className="text-2xl font-bold text-[#0b2345] mb-2">حدث خطأ غير متوقع</h1>
         <p className="text-[#64748b] mb-6 max-w-sm mx-auto">
           {error.message || "حدث خطأ في تحميل هذه الصفحة. يرجى المحاولة مرة أخرى."}
