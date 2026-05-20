@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -9,10 +10,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       include: { product: { select: { id: true, name: true, sku: true } } },
       orderBy: { createdAt: "asc" },
     });
-    return NextResponse.json(parts);
+    return ok(parts);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -21,12 +22,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params;
     const { productId, name, qty, unitCost } = await req.json();
 
-    if (!name?.trim()) return NextResponse.json({ error: "اسم القطعة مطلوب" }, { status: 400 });
-    if (!qty || qty < 1) return NextResponse.json({ error: "الكمية يجب أن تكون أكبر من صفر" }, { status: 400 });
-    if (unitCost === undefined || unitCost < 0) return NextResponse.json({ error: "السعر غير صالح" }, { status: 400 });
+    if (!name?.trim()) return ok({ error: "اسم القطعة مطلوب" }, { status: 400 });
+    if (!qty || qty < 1) return ok({ error: "الكمية يجب أن تكون أكبر من صفر" }, { status: 400 });
+    if (unitCost === undefined || unitCost < 0) return ok({ error: "السعر غير صالح" }, { status: 400 });
 
     const ticket = await prisma.maintenanceTicket.findFirst({ where: { id, isDeleted: false } });
-    if (!ticket) return NextResponse.json({ error: "التذكرة غير موجودة" }, { status: 404 });
+    if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
 
     const total = qty * unitCost;
 
@@ -65,10 +66,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return p;
     });
 
-    return NextResponse.json(part, { status: 201 });
+    return ok(part, { status: 201 });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -77,7 +78,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const { id } = await params;
     const { partId } = await req.json();
     const part = await prisma.ticketPart.findFirst({ where: { id: partId, ticketId: id } });
-    if (!part) return NextResponse.json({ error: "القطعة غير موجودة" }, { status: 404 });
+    if (!part) return ok({ error: "القطعة غير موجودة" }, { status: 404 });
 
     await prisma.$transaction(async (tx) => {
       await tx.ticketPart.delete({ where: { id: partId } });
@@ -98,9 +99,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       }
     });
 
-    return NextResponse.json({ success: true });
+    return ok({ success: true });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

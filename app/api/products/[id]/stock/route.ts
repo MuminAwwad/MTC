@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 
@@ -18,7 +19,7 @@ export async function POST(
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
+      return ok(
         { error: "بيانات غير صالحة", details: parsed.error.issues },
         { status: 400 }
       );
@@ -31,7 +32,7 @@ export async function POST(
     });
 
     if (!product) {
-      return NextResponse.json({ error: "المنتج غير موجود" }, { status: 404 });
+      return ok({ error: "المنتج غير موجود" }, { status: 404 });
     }
 
     // Compute new stock
@@ -40,7 +41,7 @@ export async function POST(
       newQty = product.stockQty + qty;
     } else if (type === "OUT") {
       if (product.stockQty < qty) {
-        return NextResponse.json(
+        return ok(
           { error: `الكمية المطلوبة (${qty}) أكبر من المخزون الحالي (${product.stockQty})` },
           { status: 400 }
         );
@@ -66,9 +67,9 @@ export async function POST(
       }),
     ]);
 
-    return NextResponse.json({ movement, newStockQty: newQty }, { status: 201 });
+    return ok({ movement, newStockQty: newQty }, { status: 201 });
   } catch (error) {
     console.error("POST /api/products/[id]/stock", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }

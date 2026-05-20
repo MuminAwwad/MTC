@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { TicketStatus } from "@prisma/client";
 
@@ -24,11 +25,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         createdBy: { select: { id: true, name: true } },
       },
     });
-    if (!ticket) return NextResponse.json({ error: "التذكرة غير موجودة" }, { status: 404 });
-    return NextResponse.json(ticket);
+    if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
+    return ok(ticket);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -49,10 +50,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     } = body;
 
     const ticket = await prisma.maintenanceTicket.findFirst({ where: { id, isDeleted: false } });
-    if (!ticket) return NextResponse.json({ error: "التذكرة غير موجودة" }, { status: 404 });
+    if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
 
     if (newStatus && !VALID_TRANSITIONS[ticket.status].includes(newStatus)) {
-      return NextResponse.json({ error: "تحويل الحالة غير مسموح" }, { status: 400 });
+      return ok({ error: "تحويل الحالة غير مسموح" }, { status: 400 });
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -86,10 +87,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return result;
     });
 
-    return NextResponse.json(updated);
+    return ok(updated);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -97,14 +98,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const { id } = await params;
     const ticket = await prisma.maintenanceTicket.findFirst({ where: { id, isDeleted: false } });
-    if (!ticket) return NextResponse.json({ error: "التذكرة غير موجودة" }, { status: 404 });
+    if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
     if (!["RECEIVED", "CANCELLED"].includes(ticket.status)) {
-      return NextResponse.json({ error: "لا يمكن حذف تذكرة نشطة" }, { status: 400 });
+      return ok({ error: "لا يمكن حذف تذكرة نشطة" }, { status: 400 });
     }
     await prisma.maintenanceTicket.update({ where: { id }, data: { isDeleted: true } });
-    return NextResponse.json({ success: true });
+    return ok({ success: true });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

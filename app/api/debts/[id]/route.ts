@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -12,11 +13,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         payments: { orderBy: { paidAt: "asc" } },
       },
     });
-    if (!debt) return NextResponse.json({ error: "الدين غير موجود" }, { status: 404 });
-    return NextResponse.json(debt);
+    if (!debt) return ok({ error: "الدين غير موجود" }, { status: 404 });
+    return ok(debt);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -36,9 +37,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         payments: { orderBy: { paidAt: "asc" } },
       },
     });
-    return NextResponse.json(debt);
+    return ok(debt);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

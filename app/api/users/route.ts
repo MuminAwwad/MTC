@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 
@@ -11,7 +12,7 @@ export async function GET() {
     select: { id: true, name: true, email: true, phone: true, role: true, isActive: true, createdAt: true },
     orderBy: { createdAt: "desc" },
   });
-  return NextResponse.json(users);
+  return ok(users);
 }
 
 export async function POST(req: NextRequest) {
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     const { id, name, email, phone, address, role } = await req.json();
 
     if (!id || !name || !email) {
-      return NextResponse.json({ error: "البيانات ناقصة" }, { status: 400 });
+      return ok({ error: "البيانات ناقصة" }, { status: 400 });
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
-      return NextResponse.json(
+      return ok(
         {
           error: `مستخدم بنفس البريد الإلكتروني موجود مسبقًا: ${existing.name}`,
           existingUserId: existing.id,
@@ -53,9 +54,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(user, { status: 201 });
+    return ok(user, { status: 201 });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { DebtStatus, Currency } from "@prisma/client";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
       _sum: { amount: true },
     });
 
-    return NextResponse.json({
+    return ok({
       debts,
       total,
       page,
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -57,8 +58,8 @@ export async function POST(req: NextRequest) {
   try {
     const { customerId, amount, currency = "ILS", reason, dueDate, notes } = await req.json();
 
-    if (!customerId) return NextResponse.json({ error: "العميل مطلوب" }, { status: 400 });
-    if (!amount || amount <= 0) return NextResponse.json({ error: "المبلغ يجب أن يكون أكبر من صفر" }, { status: 400 });
+    if (!customerId) return ok({ error: "العميل مطلوب" }, { status: 400 });
+    if (!amount || amount <= 0) return ok({ error: "المبلغ يجب أن يكون أكبر من صفر" }, { status: 400 });
 
     const debt = await prisma.debt.create({
       data: {
@@ -76,9 +77,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(debt, { status: 201 });
+    return ok(debt, { status: 201 });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

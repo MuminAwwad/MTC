@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 
@@ -51,13 +52,13 @@ export async function GET(
     });
 
     if (!product) {
-      return NextResponse.json({ error: "المنتج غير موجود" }, { status: 404 });
+      return ok({ error: "المنتج غير موجود" }, { status: 404 });
     }
 
-    return NextResponse.json(product);
+    return ok(product);
   } catch (error) {
     console.error("GET /api/products/[id]", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -71,7 +72,7 @@ export async function PUT(
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json({ error: "بيانات غير صالحة" }, { status: 400 });
+      return ok({ error: "بيانات غير صالحة" }, { status: 400 });
     }
 
     const data = parsed.data;
@@ -84,7 +85,7 @@ export async function PUT(
         select: { id: true, name: true },
       });
       if (exists) {
-        return NextResponse.json(
+        return ok(
           {
             error: `منتج آخر بنفس رمز SKU موجود: ${exists.name}`,
             existingProductId: exists.id,
@@ -100,7 +101,7 @@ export async function PUT(
         select: { id: true, name: true },
       });
       if (exists) {
-        return NextResponse.json(
+        return ok(
           {
             error: `منتج آخر بنفس الباركود موجود: ${exists.name}`,
             existingProductId: exists.id,
@@ -119,10 +120,10 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(product);
+    return ok(product);
   } catch (error) {
     console.error("PUT /api/products/[id]", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -137,9 +138,9 @@ export async function DELETE(
       data: { isDeleted: true, isActive: false },
     });
 
-    return NextResponse.json({ success: true });
+    return ok({ success: true });
   } catch (error) {
     console.error("DELETE /api/products/[id]", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }

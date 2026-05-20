@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 
@@ -24,10 +25,10 @@ export async function GET(request: NextRequest) {
       orderBy: { name: "asc" },
     });
 
-    return NextResponse.json(categories);
+    return ok(categories);
   } catch (error) {
     console.error("GET /api/categories", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
+      return ok(
         { error: "بيانات غير صالحة", details: parsed.error.issues },
         { status: 400 }
       );
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existing) {
-      return NextResponse.json(
+      return ok(
         {
           error: `فئة بنفس الاسم موجودة مسبقًا: ${existing.name}`,
           existingCategoryId: existing.id,
@@ -78,9 +79,9 @@ export async function POST(request: NextRequest) {
       data: { name, slug, icon },
     });
 
-    return NextResponse.json(category, { status: 201 });
+    return ok(category, { status: 201 });
   } catch (error) {
     console.error("POST /api/categories", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }

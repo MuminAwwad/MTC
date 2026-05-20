@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 
 export async function GET() {
@@ -63,8 +63,8 @@ export async function GET() {
       value: grandTotal > 0 ? Math.round((value / grandTotal) * 100) : 0,
     }));
 
-    return NextResponse.json({ sales, categories });
+    return ok({ sales, categories });
   } catch {
-    return NextResponse.json({ sales: [], categories: [] });
+    return ok({ sales: [], categories: [] });
   }
 }

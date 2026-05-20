@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { generateTicketNumber } from "@/lib/invoice-number";
 import { TicketStatus, TicketPriority, DeviceType } from "@prisma/client";
@@ -44,10 +45,10 @@ export async function GET(req: NextRequest) {
       prisma.maintenanceTicket.count({ where }),
     ]);
 
-    return NextResponse.json({ tickets, total, page, pageCount: Math.ceil(total / ITEMS_PER_PAGE) });
+    return ok({ tickets, total, page, pageCount: Math.ceil(total / ITEMS_PER_PAGE) });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -69,9 +70,9 @@ export async function POST(req: NextRequest) {
       technicianNotes,
     } = body;
 
-    if (!customerId) return NextResponse.json({ error: "العميل مطلوب" }, { status: 400 });
-    if (!deviceType) return NextResponse.json({ error: "نوع الجهاز مطلوب" }, { status: 400 });
-    if (!problemDescription?.trim()) return NextResponse.json({ error: "وصف المشكلة مطلوب" }, { status: 400 });
+    if (!customerId) return ok({ error: "العميل مطلوب" }, { status: 400 });
+    if (!deviceType) return ok({ error: "نوع الجهاز مطلوب" }, { status: 400 });
+    if (!problemDescription?.trim()) return ok({ error: "وصف المشكلة مطلوب" }, { status: 400 });
 
     const ticket = await prisma.$transaction(async (tx) => {
       const ticketNumber = await generateTicketNumber(tx);
@@ -101,9 +102,9 @@ export async function POST(req: NextRequest) {
       });
     });
 
-    return NextResponse.json(ticket, { status: 201 });
+    return ok(ticket, { status: 201 });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

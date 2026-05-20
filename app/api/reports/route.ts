@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
       const totalExpenses = Number(expenses._sum.amount ?? 0);
       const netProfit = totalRevenue - totalExpenses;
 
-      return NextResponse.json({
+      return ok({
         type: "pl",
         period: { from: fromDate, to: toDate },
         revenue: {
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 10);
 
-      return NextResponse.json({
+      return ok({
         type: "sales",
         byDay: Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date)),
         topCustomers,
@@ -120,7 +121,7 @@ export async function GET(req: NextRequest) {
         WHERE "isActive" = true AND "isDeleted" = false
       `;
 
-      return NextResponse.json({
+      return ok({
         type: "inventory",
         lowStock,
         summary: {
@@ -159,7 +160,7 @@ export async function GET(req: NextRequest) {
       };
       aged.forEach((d) => { buckets[d.bucket].count++; buckets[d.bucket].total += d.remaining; });
 
-      return NextResponse.json({
+      return ok({
         type: "debts",
         debts: aged,
         buckets,
@@ -167,9 +168,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ error: "نوع تقرير غير صالح" }, { status: 400 });
+    return ok({ error: "نوع تقرير غير صالح" }, { status: 400 });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

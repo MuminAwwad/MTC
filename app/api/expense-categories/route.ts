@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -7,10 +8,10 @@ export async function GET() {
       where: { isDeleted: false },
       orderBy: { name: "asc" },
     });
-    return NextResponse.json(categories);
+    return ok(categories);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
   try {
     const { name, icon, color } = await req.json();
     const normalized = name?.trim();
-    if (!normalized) return NextResponse.json({ error: "الاسم مطلوب" }, { status: 400 });
+    if (!normalized) return ok({ error: "الاسم مطلوب" }, { status: 400 });
 
     const existing = await prisma.expenseCategory.findFirst({
       where: {
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
       select: { id: true, name: true },
     });
     if (existing) {
-      return NextResponse.json(
+      return ok(
         {
           error: `فئة بنفس الاسم موجودة مسبقًا: ${existing.name}`,
           existingCategoryId: existing.id,
@@ -40,9 +41,9 @@ export async function POST(req: NextRequest) {
     const cat = await prisma.expenseCategory.create({
       data: { name: normalized, icon: icon || null, color: color || null },
     });
-    return NextResponse.json(cat, { status: 201 });
+    return ok(cat, { status: 201 });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

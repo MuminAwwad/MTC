@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
         include: { category: true },
         orderBy: { name: "asc" },
       });
-      return NextResponse.json(products);
+      return ok(products);
     }
 
     const [products, total] = await Promise.all([
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
       (p) => p.stockQty <= p.minStockQty
     ).length;
 
-    return NextResponse.json({
+    return ok({
       data: filtered,
       total: lowStock ? filtered.length : total,
       page,
@@ -90,7 +91,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("GET /api/products", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
+      return ok(
         { error: "بيانات غير صالحة", details: parsed.error.issues },
         { status: 400 }
       );
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
         select: { id: true, name: true },
       });
       if (exists) {
-        return NextResponse.json(
+        return ok(
           {
             error: `منتج بنفس رمز SKU موجود مسبقًا: ${exists.name}`,
             existingProductId: exists.id,
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
         select: { id: true, name: true },
       });
       if (exists) {
-        return NextResponse.json(
+        return ok(
           {
             error: `منتج بنفس الباركود موجود مسبقًا: ${exists.name}`,
             existingProductId: exists.id,
@@ -176,9 +177,9 @@ export async function POST(request: NextRequest) {
       return p;
     });
 
-    return NextResponse.json(product, { status: 201 });
+    return ok(product, { status: 201 });
   } catch (error) {
     console.error("POST /api/products", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }

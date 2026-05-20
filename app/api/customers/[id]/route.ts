@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 
@@ -21,7 +22,7 @@ export async function GET(
     });
 
     if (!customer) {
-      return NextResponse.json({ error: "العميل غير موجود" }, { status: 404 });
+      return ok({ error: "العميل غير موجود" }, { status: 404 });
     }
 
     // Fetch related data in parallel
@@ -85,7 +86,7 @@ export async function GET(
         return sum + Number(d.amount) - paid;
       }, 0);
 
-    return NextResponse.json({
+    return ok({
       ...customer,
       invoices,
       tickets,
@@ -99,7 +100,7 @@ export async function GET(
     });
   } catch (error) {
     console.error("GET /api/customers/[id]", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -113,7 +114,7 @@ export async function PUT(
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json({ error: "بيانات غير صالحة" }, { status: 400 });
+      return ok({ error: "بيانات غير صالحة" }, { status: 400 });
     }
 
     const normalizedPhone = parsed.data.phone?.trim() || null;
@@ -124,7 +125,7 @@ export async function PUT(
         select: { id: true, name: true },
       });
       if (existing) {
-        return NextResponse.json(
+        return ok(
           {
             error: `عميل آخر بنفس رقم الهاتف موجود: ${existing.name}`,
             existingCustomerId: existing.id,
@@ -139,10 +140,10 @@ export async function PUT(
       data: { ...parsed.data, phone: normalizedPhone },
     });
 
-    return NextResponse.json(customer);
+    return ok(customer);
   } catch (error) {
     console.error("PUT /api/customers/[id]", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -156,9 +157,9 @@ export async function DELETE(
       where: { id },
       data: { isDeleted: true },
     });
-    return NextResponse.json({ success: true });
+    return ok({ success: true });
   } catch (error) {
     console.error("DELETE /api/customers/[id]", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }

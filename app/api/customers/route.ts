@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
         orderBy: { name: "asc" },
         select: { id: true, name: true, phone: true },
       });
-      return NextResponse.json(customers);
+      return ok(customers);
     }
 
     const [customers, total] = await Promise.all([
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest) {
       totalSpent: spentMap[c.id] ?? 0,
     }));
 
-    return NextResponse.json({
+    return ok({
       data: result,
       total,
       page,
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("GET /api/customers", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
+      return ok(
         { error: "بيانات غير صالحة", details: parsed.error.issues },
         { status: 400 }
       );
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
         select: { id: true, name: true },
       });
       if (existing) {
-        return NextResponse.json(
+        return ok(
           {
             error: `عميل بنفس رقم الهاتف موجود مسبقًا: ${existing.name}`,
             existingCustomerId: existing.id,
@@ -130,9 +131,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(customer, { status: 201 });
+    return ok(customer, { status: 201 });
   } catch (error) {
     console.error("POST /api/customers", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }

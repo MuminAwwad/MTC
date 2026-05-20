@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
         where,
         orderBy: { name: "asc" },
       });
-      return NextResponse.json(suppliers);
+      return ok(suppliers);
     }
 
     const [suppliers, total] = await Promise.all([
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
       prisma.supplier.count({ where }),
     ]);
 
-    return NextResponse.json({
+    return ok({
       data: suppliers,
       total,
       page,
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("GET /api/suppliers", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
+      return ok(
         { error: "بيانات غير صالحة", details: parsed.error.issues },
         { status: 400 }
       );
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
         select: { id: true, name: true },
       });
       if (existing) {
-        return NextResponse.json(
+        return ok(
           {
             error: `مورد بنفس رقم الهاتف موجود مسبقًا: ${existing.name}`,
             existingSupplierId: existing.id,
@@ -109,9 +110,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(supplier, { status: 201 });
+    return ok(supplier, { status: 201 });
   } catch (error) {
     console.error("POST /api/suppliers", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }

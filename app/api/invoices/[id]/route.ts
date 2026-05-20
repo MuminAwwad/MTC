@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { InvoiceStatus } from "@prisma/client";
 
@@ -17,11 +18,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         createdBy: { select: { id: true, name: true } },
       },
     });
-    if (!invoice) return NextResponse.json({ error: "الفاتورة غير موجودة" }, { status: 404 });
-    return NextResponse.json(invoice);
+    if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
+    return ok(invoice);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -35,7 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       where: { id, isDeleted: false },
       include: { items: true, debts: { where: { isDeleted: false } } },
     });
-    if (!invoice) return NextResponse.json({ error: "الفاتورة غير موجودة" }, { status: 404 });
+    if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
 
     const validTransitions: Record<InvoiceStatus, InvoiceStatus[]> = {
       DRAFT: ["ISSUED", "CANCELLED"],
@@ -46,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     };
 
     if (newStatus && !validTransitions[invoice.status].includes(newStatus)) {
-      return NextResponse.json({ error: "تحويل الحالة غير مسموح" }, { status: 400 });
+      return ok({ error: "تحويل الحالة غير مسموح" }, { status: 400 });
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -120,10 +121,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       });
     });
 
-    return NextResponse.json(updated);
+    return ok(updated);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -131,14 +132,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const { id } = await params;
     const invoice = await prisma.invoice.findFirst({ where: { id, isDeleted: false } });
-    if (!invoice) return NextResponse.json({ error: "الفاتورة غير موجودة" }, { status: 404 });
+    if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
     if (invoice.status !== "DRAFT") {
-      return NextResponse.json({ error: "يمكن حذف المسودات فقط" }, { status: 400 });
+      return ok({ error: "يمكن حذف المسودات فقط" }, { status: 400 });
     }
     await prisma.invoice.update({ where: { id }, data: { isDeleted: true } });
-    return NextResponse.json({ success: true });
+    return ok({ success: true });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -7,15 +8,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { amount, note } = await req.json();
 
     if (!amount || amount <= 0) {
-      return NextResponse.json({ error: "المبلغ يجب أن يكون أكبر من صفر" }, { status: 400 });
+      return ok({ error: "المبلغ يجب أن يكون أكبر من صفر" }, { status: 400 });
     }
 
     const debt = await prisma.debt.findFirst({
       where: { id, isDeleted: false },
       include: { payments: true },
     });
-    if (!debt) return NextResponse.json({ error: "الدين غير موجود" }, { status: 404 });
-    if (debt.status === "PAID") return NextResponse.json({ error: "الدين مسدد بالكامل" }, { status: 400 });
+    if (!debt) return ok({ error: "الدين غير موجود" }, { status: 404 });
+    if (debt.status === "PAID") return ok({ error: "الدين مسدد بالكامل" }, { status: 400 });
 
     const totalPaid = debt.payments.reduce((s, p) => s + Number(p.amount), 0);
     const remaining = Number(debt.amount) - totalPaid;
@@ -52,9 +53,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return updatedDebt;
     });
 
-    return NextResponse.json(updated);
+    return ok(updated);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

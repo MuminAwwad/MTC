@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -7,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { amount, note } = await req.json();
 
     if (!amount || amount <= 0) {
-      return NextResponse.json({ error: "المبلغ يجب أن يكون أكبر من صفر" }, { status: 400 });
+      return ok({ error: "المبلغ يجب أن يكون أكبر من صفر" }, { status: 400 });
     }
 
     const invoice = await prisma.invoice.findFirst({
@@ -15,10 +16,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { debts: { where: { isDeleted: false }, include: { payments: true } } },
     });
 
-    if (!invoice) return NextResponse.json({ error: "الفاتورة غير موجودة" }, { status: 404 });
-    if (invoice.status === "PAID") return NextResponse.json({ error: "الفاتورة مدفوعة بالكامل" }, { status: 400 });
+    if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
+    if (invoice.status === "PAID") return ok({ error: "الفاتورة مدفوعة بالكامل" }, { status: 400 });
     if (invoice.status === "DRAFT" || invoice.status === "CANCELLED") {
-      return NextResponse.json({ error: "لا يمكن إضافة دفعة لهذه الفاتورة" }, { status: 400 });
+      return ok({ error: "لا يمكن إضافة دفعة لهذه الفاتورة" }, { status: 400 });
     }
 
     const remaining = Number(invoice.remainingAmount);
@@ -60,9 +61,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return inv;
     });
 
-    return NextResponse.json(updated);
+    return ok(updated);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { Currency } from "@prisma/client";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
       _sum: { amount: true },
     });
 
-    return NextResponse.json({
+    return ok({
       expenses,
       total,
       page,
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
   try {
     const { categoryId, amount, currency = "ILS", description, date } = await req.json();
 
-    if (!amount || amount <= 0) return NextResponse.json({ error: "المبلغ يجب أن يكون أكبر من صفر" }, { status: 400 });
+    if (!amount || amount <= 0) return ok({ error: "المبلغ يجب أن يكون أكبر من صفر" }, { status: 400 });
 
     const expense = await prisma.expense.create({
       data: {
@@ -72,10 +73,10 @@ export async function POST(req: NextRequest) {
       include: { category: true },
     });
 
-    return NextResponse.json(expense, { status: 201 });
+    return ok(expense, { status: 201 });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -83,9 +84,9 @@ export async function DELETE(req: NextRequest) {
   try {
     const { id } = await req.json();
     await prisma.expense.update({ where: { id }, data: { isDeleted: true } });
-    return NextResponse.json({ success: true });
+    return ok({ success: true });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

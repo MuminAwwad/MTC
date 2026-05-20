@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { generateInvoiceNumber } from "@/lib/invoice-number";
 import { InvoiceStatus } from "@prisma/client";
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
       _sum: { total: true, paidAmount: true, remainingAmount: true },
     });
 
-    return NextResponse.json({
+    return ok({
       invoices,
       total,
       page,
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -88,8 +89,8 @@ export async function POST(req: NextRequest) {
       paidAmount = 0,
     } = body;
 
-    if (!customerId) return NextResponse.json({ error: "العميل مطلوب" }, { status: 400 });
-    if (!items || items.length === 0) return NextResponse.json({ error: "يجب إضافة منتج واحد على الأقل" }, { status: 400 });
+    if (!customerId) return ok({ error: "العميل مطلوب" }, { status: 400 });
+    if (!items || items.length === 0) return ok({ error: "يجب إضافة منتج واحد على الأقل" }, { status: 400 });
 
     const subtotal = items.reduce((sum: number, item: { qty: number; unitPrice: number; discount: number }) => {
       const lineTotal = item.qty * item.unitPrice - (item.discount ?? 0);
@@ -190,9 +191,9 @@ export async function POST(req: NextRequest) {
       return created;
     });
 
-    return NextResponse.json(invoice, { status: 201 });
+    return ok(invoice, { status: 201 });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }

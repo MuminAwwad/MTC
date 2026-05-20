@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
 
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
       prisma.stockMovement.count({ where }),
     ]);
 
-    return NextResponse.json({
+    return ok({
       data: movements,
       total,
       page,
@@ -42,6 +43,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("GET /api/inventory/movements", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }

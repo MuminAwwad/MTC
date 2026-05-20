@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 
@@ -21,13 +22,13 @@ export async function GET(
     });
 
     if (!category) {
-      return NextResponse.json({ error: "الفئة غير موجودة" }, { status: 404 });
+      return ok({ error: "الفئة غير موجودة" }, { status: 404 });
     }
 
-    return NextResponse.json(category);
+    return ok(category);
   } catch (error) {
     console.error("GET /api/categories/[id]", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -41,7 +42,7 @@ export async function PUT(
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json({ error: "بيانات غير صالحة" }, { status: 400 });
+      return ok({ error: "بيانات غير صالحة" }, { status: 400 });
     }
 
     const normalizedName = parsed.data.name?.trim();
@@ -56,7 +57,7 @@ export async function PUT(
         select: { id: true, name: true },
       });
       if (existing) {
-        return NextResponse.json(
+        return ok(
           {
             error: `فئة أخرى بنفس الاسم موجودة: ${existing.name}`,
             existingCategoryId: existing.id,
@@ -71,10 +72,10 @@ export async function PUT(
       data: { ...parsed.data, name: normalizedName ?? parsed.data.name },
     });
 
-    return NextResponse.json(category);
+    return ok(category);
   } catch (error) {
     console.error("PUT /api/categories/[id]", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
 
@@ -89,9 +90,9 @@ export async function DELETE(
       data: { isDeleted: true },
     });
 
-    return NextResponse.json({ success: true });
+    return ok({ success: true });
   } catch (error) {
     console.error("DELETE /api/categories/[id]", error);
-    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }

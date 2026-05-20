@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 
@@ -10,8 +11,8 @@ export async function GET() {
     where: { id: ctx.dbUser.id, isDeleted: false },
     select: { id: true, name: true, email: true, phone: true, address: true, role: true, createdAt: true },
   });
-  if (!user) return NextResponse.json({ error: "المستخدم غير موجود" }, { status: 404 });
-  return NextResponse.json(user);
+  if (!user) return ok({ error: "المستخدم غير موجود" }, { status: 404 });
+  return ok(user);
 }
 
 export async function PUT(req: NextRequest) {
@@ -20,16 +21,16 @@ export async function PUT(req: NextRequest) {
 
   try {
     const { name, phone, address } = await req.json();
-    if (!name?.trim()) return NextResponse.json({ error: "الاسم مطلوب" }, { status: 400 });
+    if (!name?.trim()) return ok({ error: "الاسم مطلوب" }, { status: 400 });
 
     const user = await prisma.user.update({
       where: { id: ctx.dbUser.id },
       data: { name: name.trim(), phone: phone || null, address: address || null },
       select: { id: true, name: true, email: true, phone: true, address: true, role: true, createdAt: true },
     });
-    return NextResponse.json(user);
+    return ok(user);
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
 }
