@@ -133,12 +133,15 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
           </FormField>
 
           <FormField label="الفئة" htmlFor="category">
-            <Select value={form.categoryId} onValueChange={(v) => set("categoryId", v)}>
+            <Select
+              value={form.categoryId || "__none__"}
+              onValueChange={(v) => set("categoryId", v === "__none__" ? "" : v)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="اختر الفئة" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">بدون فئة</SelectItem>
+                <SelectItem value="__none__">بدون فئة</SelectItem>
                 {categories.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
@@ -147,12 +150,15 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
           </FormField>
 
           <FormField label="المورد" htmlFor="supplier">
-            <Select value={form.supplierId} onValueChange={(v) => set("supplierId", v)}>
+            <Select
+              value={form.supplierId || "__none__"}
+              onValueChange={(v) => set("supplierId", v === "__none__" ? "" : v)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="اختر المورد" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">بدون مورد</SelectItem>
+                <SelectItem value="__none__">بدون مورد</SelectItem>
                 {suppliers.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                 ))}
