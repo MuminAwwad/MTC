@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FormField, SectionCard } from "@/components/shared";
 import type { Category, Supplier, Product } from "@prisma/client";
 
@@ -28,6 +36,35 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
   const [existingProductId, setExistingProductId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatIcon, setNewCatIcon] = useState("");
+  const [newCatSaving, setNewCatSaving] = useState(false);
+  const [newCatError, setNewCatError] = useState("");
+
+  const createCategory = async () => {
+    if (!newCatName.trim()) { setNewCatError("الاسم مطلوب"); return; }
+    setNewCatSaving(true);
+    setNewCatError("");
+    try {
+      const res = await fetch("/api/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newCatName.trim(), icon: newCatIcon || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setNewCatError(data.error ?? "تعذر إنشاء الفئة"); return; }
+      setCategories((cs) => [...cs, data]);
+      setForm((f) => ({ ...f, categoryId: data.id }));
+      setNewCatName("");
+      setNewCatIcon("");
+      setNewCatOpen(false);
+    } catch {
+      setNewCatError("خطأ في الاتصال");
+    } finally {
+      setNewCatSaving(false);
+    }
+  };
 
   const [form, setForm] = useState({
     name: initialData?.name ?? "",
@@ -133,20 +170,35 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
           </FormField>
 
           <FormField label="الفئة" htmlFor="category">
-            <Select
-              value={form.categoryId || "__none__"}
-              onValueChange={(v) => set("categoryId", v === "__none__" ? "" : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="اختر الفئة" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">بدون فئة</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Select
+                  value={form.categoryId || "__none__"}
+                  onValueChange={(v) => set("categoryId", v === "__none__" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر الفئة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">بدون فئة</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.icon ? `${c.icon} ${c.name}` : c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setNewCatOpen(true)}
+                title="إضافة فئة جديدة"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </FormField>
 
           <FormField label="المورد" htmlFor="supplier">
@@ -330,6 +382,43 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
             : "إضافة المنتج"}
         </Button>
       </div>
+
+      <Dialog open={newCatOpen} onOpenChange={setNewCatOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>فئة جديدة</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <FormField label="اسم الفئة" required>
+              <Input
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="مثال: شواحن، حافظات..."
+                autoFocus
+              />
+            </FormField>
+            <FormField label="أيقونة (إيموجي)">
+              <Input
+                value={newCatIcon}
+                onChange={(e) => setNewCatIcon(e.target.value)}
+                placeholder="🔌"
+                className="w-20 text-center"
+              />
+            </FormField>
+            {newCatError && (
+              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{newCatError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setNewCatOpen(false)} disabled={newCatSaving}>
+              إلغاء
+            </Button>
+            <Button type="button" onClick={createCategory} disabled={newCatSaving || !newCatName.trim()}>
+              {newCatSaving ? "جاري الحفظ..." : "إضافة"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }
