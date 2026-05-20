@@ -125,19 +125,18 @@ export async function parseInvoiceFromImage(
 }
 
 export async function parseInvoiceFromPdf(buffer: Buffer): Promise<ParsedInvoice> {
-  // Dynamic import — pdf-parse is heavy and only needed for PDF uploads
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
-  const { text } = await parser.getText();
-  await parser.destroy();
-  if (!text.trim()) throw new Error("لم نتمكن من قراءة نص الفاتورة من ملف PDF");
+  // Dynamic import — unpdf bundles pdfjs-dist with serverless-friendly shims
+  const { extractText } = await import("unpdf");
+  const { text } = await extractText(new Uint8Array(buffer), { mergePages: true });
+  const merged = Array.isArray(text) ? text.join("\n") : text;
+  if (!merged.trim()) throw new Error("لم نتمكن من قراءة نص الفاتورة من ملف PDF (قد يكون ممسوحًا ضوئيًا — جرّب رفعه كصورة)");
   return callGroq(
     TEXT_MODEL,
     [
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
-        content: `Below is the extracted text from a PDF purchase invoice. Extract it into the schema.\n\n${text}`,
+        content: `Below is the extracted text from a PDF purchase invoice. Extract it into the schema.\n\n${merged}`,
       },
     ],
     { jsonMode: true }
