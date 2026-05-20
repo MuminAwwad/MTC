@@ -8,22 +8,29 @@ const CURRENCY_SYMBOLS: Record<Currency, string> = {
 };
 
 export function buildInvoiceWhatsAppUrl(input: {
+  invoiceId: string;
   invoiceNumber: string;
   customerName: string;
   customerPhone?: string | null;
   currency: Currency;
   total: number | string;
   remaining: number | string;
+  /** Absolute origin of this app, used to build the public invoice link. */
+  origin: string;
 }): string {
   const sym = CURRENCY_SYMBOLS[input.currency];
   const total = Number(input.total) || 0;
   const remaining = Number(input.remaining) || 0;
+  const link = `${input.origin.replace(/\/$/, "")}/print/invoices/${input.invoiceId}`;
   const message = [
     `مرحبًا ${input.customerName}،`,
     "",
     `فاتورة رقم: ${input.invoiceNumber}`,
     `الإجمالي: ${sym}${total.toFixed(2)}`,
     `المتبقي: ${sym}${remaining.toFixed(2)}`,
+    "",
+    `لعرض وتحميل الفاتورة:`,
+    link,
     "",
     `شكرًا لتعاملكم مع ${SHOP_INFO.nameAr}`,
   ].join("\n");

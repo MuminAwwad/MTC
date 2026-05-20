@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 import { SHOP_INFO, INVOICE_STATUS_LABELS } from "@/lib/constants";
 import { formatDate, formatDateTime } from "@/lib/formatters";
 import { buildInvoiceWhatsAppUrl } from "@/lib/whatsapp";
@@ -7,6 +9,14 @@ import PrintButton from "./PrintButton";
 
 export default async function PrintInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const hdrs = await headers();
+  const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "";
+  const proto = hdrs.get("x-forwarded-proto") ?? "https";
+  const origin = host ? `${proto}://${host}` : "";
+
+  const supabase = await createClient();
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  const isStaff = !!authUser;
   const invoice = await prisma.invoice.findFirst({
     where: { id, isDeleted: false },
     include: {
@@ -33,27 +43,33 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
         body { font-family: var(--font-arabic, 'IBM Plex Sans Arabic', sans-serif); }
       `}</style>
 
-      {/* Print button — hidden in print */}
+      {/* Print/share buttons — hidden in print */}
       <div className="no-print fixed top-4 left-4 flex gap-2 z-10">
         <PrintButton />
-        <a
-          href={buildInvoiceWhatsAppUrl({
-            invoiceNumber: invoice.invoiceNumber,
-            customerName: invoice.customer.name,
-            customerPhone: invoice.customer.phone,
-            currency: invoice.currency,
-            total: Number(invoice.total),
-            remaining: Number(invoice.remainingAmount),
-          })}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-4 py-2 text-sm bg-[#25d366] text-white rounded-lg hover:bg-[#1da851]"
-        >
-          واتساب
-        </a>
-        <a href={`/invoices/${id}`} className="px-4 py-2 text-sm border rounded-lg bg-white hover:bg-gray-50">
-          العودة
-        </a>
+        {isStaff && (
+          <a
+            href={buildInvoiceWhatsAppUrl({
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.invoiceNumber,
+              customerName: invoice.customer.name,
+              customerPhone: invoice.customer.phone,
+              currency: invoice.currency,
+              total: Number(invoice.total),
+              remaining: Number(invoice.remainingAmount),
+              origin,
+            })}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 text-sm bg-[#25d366] text-white rounded-lg hover:bg-[#1da851]"
+          >
+            واتساب
+          </a>
+        )}
+        {isStaff && (
+          <a href={`/invoices/${id}`} className="px-4 py-2 text-sm border rounded-lg bg-white hover:bg-gray-50">
+            العودة
+          </a>
+        )}
       </div>
 
       {/* A4 page */}

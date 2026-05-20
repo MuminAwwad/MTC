@@ -36,12 +36,15 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password");
   const isApiRoute = pathname.startsWith("/api");
+  // Public read-only invoice/ticket views; IDs are cuids so links are
+  // unguessable. Used for sharing via WhatsApp/SMS to customers.
+  const isPublicShare = pathname.startsWith("/print/");
 
   if (!user) {
     if (isApiRoute) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }
-    if (!isAuthPage) {
+    if (!isAuthPage && !isPublicShare) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
   }

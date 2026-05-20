@@ -135,12 +135,14 @@ export default function InvoiceDetailPage() {
             </Link>
             <a
               href={buildInvoiceWhatsAppUrl({
+                invoiceId: invoice.id,
                 invoiceNumber: invoice.invoiceNumber,
                 customerName: invoice.customer.name,
                 customerPhone: invoice.customer.phone,
                 currency: invoice.currency,
                 total: Number(invoice.total),
                 remaining: Number(invoice.remainingAmount),
+                origin: typeof window !== "undefined" ? window.location.origin : "",
               })}
               target="_blank"
               rel="noopener noreferrer"
