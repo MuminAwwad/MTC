@@ -84,7 +84,45 @@ export default function CustomersPage() {
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Mobile: cards */}
+            <ul className="md:hidden divide-y divide-[#f1f5f9]">
+              {customers.map((c) => (
+                <li key={c.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <Link href={`/customers/${c.id}`} className="font-semibold text-[#1e293b] hover:text-[#104e98] min-w-0">
+                      <p className="break-words">{c.name}</p>
+                      {c.address && <p className="text-xs text-[#94a3b8] mt-0.5 line-clamp-1">{c.address}</p>}
+                    </Link>
+                    <CurrencyDisplay
+                      amount={c.totalSpent}
+                      size="sm"
+                      className={c.totalSpent > 0 ? "text-green-700 font-semibold flex-shrink-0" : "text-[#94a3b8] flex-shrink-0"}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2 mt-2">
+                    {c.phone ? (
+                      <a href={`tel:${c.phone}`} className="flex items-center gap-1.5 text-xs text-[#64748b] ltr">
+                        <Phone className="h-3.5 w-3.5" />
+                        {c.phone}
+                      </a>
+                    ) : (
+                      <span className="text-xs text-[#94a3b8]">—</span>
+                    )}
+                    <div className="flex gap-1.5">
+                      <span className="bg-[#e8f0fc] text-[#104e98] text-xs px-2 py-0.5 rounded-full font-medium">
+                        {c._count.invoices} فاتورة
+                      </span>
+                      <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                        {c._count.maintenanceTickets} صيانة
+                      </span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">

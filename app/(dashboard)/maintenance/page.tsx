@@ -123,9 +123,46 @@ export default function MaintenancePage() {
           action={{ label: "تذكرة جديدة", onClick: () => router.push("/maintenance/new") }}
         />
       ) : (
-        <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <>
+          {/* Mobile: cards */}
+          <ul className="md:hidden space-y-2">
+            {tickets.map((t) => (
+              <li key={t.id} className={`bg-white rounded-xl border p-4 ${isOverdue(t) ? "border-red-200 bg-red-50/40" : "border-[#e2e8f0]"}`}>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <Link href={`/maintenance/${t.id}`} className="font-bold text-[#104e98] hover:underline ltr">
+                    {t.ticketNumber}
+                  </Link>
+                  <StatusBadge status={{ type: "ticket", status: t.status }} />
+                </div>
+                <Link href={`/customers/${t.customer.id}`} className="block text-sm font-medium text-[#1e293b] hover:text-[#104e98] mb-1">
+                  {t.customer.name}
+                </Link>
+                <div className="text-xs text-[#64748b] mb-2">
+                  {DEVICE_TYPE_LABELS[t.deviceType]}
+                  {(t.deviceBrand || t.deviceModel) && <span className="text-[#94a3b8]"> · {[t.deviceBrand, t.deviceModel].filter(Boolean).join(" ")}</span>}
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 font-medium ${TICKET_PRIORITY_COLORS[t.priority]}`}>
+                    {TICKET_PRIORITY_LABELS[t.priority]}
+                  </span>
+                  <div className="flex items-center gap-3 text-[#94a3b8]">
+                    {t.estimatedDelivery && (
+                      <span className={`flex items-center gap-1 ${isOverdue(t) ? "text-red-600 font-medium" : ""}`}>
+                        {isOverdue(t) && <Clock className="h-3 w-3" />}
+                        {formatDate(t.estimatedDelivery)}
+                      </span>
+                    )}
+                    <span>{formatDate(t.createdAt)}</span>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* Desktop: table */}
+          <div className="hidden md:block bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
               <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
                 <tr>
                   <th className="text-right px-4 py-3 font-medium text-[#64748b]">رقم التذكرة</th>
@@ -181,8 +218,9 @@ export default function MaintenancePage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {totalPages > 1 && (
