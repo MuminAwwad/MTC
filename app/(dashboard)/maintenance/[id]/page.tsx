@@ -146,13 +146,32 @@ export default function TicketDetailPage() {
 
   const saveField = async (field: string, value: unknown) => {
     setSavingField(true);
-    const res = await fetch(`/api/tickets/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: value }),
-    });
-    if (res.ok) { setTicket(await res.json()); }
-    setSavingField(false);
+    setError("");
+    try {
+      const res = await fetch(`/api/tickets/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTicket(data);
+        if (field === "finalCost") setFinalCost(data.finalCost ? String(Number(data.finalCost)) : "");
+        if (field === "diagnosis") setDiagnosis(data.diagnosis ?? "");
+        if (field === "solution") setSolution(data.solution ?? "");
+        toast("تم الحفظ");
+      } else {
+        const msg = data.error ?? "تعذر الحفظ";
+        setError(msg);
+        toast(msg, "error");
+      }
+    } catch {
+      const msg = "خطأ في الاتصال";
+      setError(msg);
+      toast(msg, "error");
+    } finally {
+      setSavingField(false);
+    }
   };
 
   const addPart = async () => {
