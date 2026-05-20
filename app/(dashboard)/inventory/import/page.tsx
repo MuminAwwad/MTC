@@ -21,6 +21,7 @@ interface ParsedInvoice {
   items: ParsedItem[];
   invoiceNumber: string;
   invoiceDate: string;
+  debugSource: string;
 }
 
 let counter = 0;
@@ -42,6 +43,19 @@ export default function InventoryImportPage() {
   const [error, setError] = useState("");
   const [fileName, setFileName] = useState("");
   const [data, setData] = useState<ParsedInvoice | null>(null);
+  const [markup, setMarkup] = useState(30);
+
+  const applyMarkup = (pct: number) => {
+    setMarkup(pct);
+    if (!data) return;
+    setData({
+      ...data,
+      items: data.items.map((it) => ({
+        ...it,
+        sellPrice: Math.round(it.unitCost * (1 + pct / 100) * 100) / 100,
+      })),
+    });
+  };
 
   const onFile = async (file: File) => {
     setError("");
@@ -56,23 +70,27 @@ export default function InventoryImportPage() {
         setError(body.error ?? "فشل تحليل الملف");
         return;
       }
-      // Normalize into the editable shape
+      // Normalize into the editable shape — sellPrice = cost * (1 + markup%)
       setData({
         supplier: {
           name: body.supplier?.name ?? "",
           phone: body.supplier?.phone ?? "",
           company: body.supplier?.company ?? "",
         },
-        items: (body.items ?? []).map((it: { name: string; qty: number; unitCost: number; sku: string | null }) => ({
-          id: `it-${++counter}`,
-          name: it.name,
-          qty: it.qty || 1,
-          unitCost: Number(it.unitCost) || 0,
-          sku: it.sku,
-          sellPrice: Number(it.unitCost) || 0,
-        })),
+        items: (body.items ?? []).map((it: { name: string; qty: number; unitCost: number; sku: string | null }) => {
+          const cost = Number(it.unitCost) || 0;
+          return {
+            id: `it-${++counter}`,
+            name: it.name,
+            qty: it.qty || 1,
+            unitCost: cost,
+            sku: it.sku,
+            sellPrice: Math.round(cost * (1 + markup / 100) * 100) / 100,
+          };
+        }),
         invoiceNumber: body.invoiceNumber ?? "",
         invoiceDate: body.invoiceDate ?? "",
+        debugSource: body._debugSource ?? "",
       });
     } catch {
       setError("خطأ في الاتصال");
@@ -226,7 +244,23 @@ export default function InventoryImportPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title={`الأصناف (${data.items.length})`}>
+          <SectionCard
+            title={`الأصناف (${data.items.length})`}
+            action={
+              <label className="flex items-center gap-2 text-xs text-[#64748b]">
+                نسبة الربح
+                <Input
+                  type="number"
+                  min="0"
+                  value={markup}
+                  onChange={(e) => applyMarkup(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-20 h-8 text-sm text-center"
+                  dir="ltr"
+                />
+                <span>%</span>
+              </label>
+            }
+          >
             <div className="space-y-3">
               <div className="hidden md:grid grid-cols-[2fr_120px_80px_120px_120px_36px] gap-2 px-1 text-xs font-medium text-[#64748b]">
                 <span>الصنف</span>
@@ -301,6 +335,15 @@ export default function InventoryImportPage() {
             <span className="text-sm text-[#64748b]">الإجمالي الذي سيُسجَّل كمستحق على المورد</span>
             <span className="font-bold text-[#0b2345] ltr">₪{itemsTotal.toFixed(2)}</span>
           </div>
+
+          {data.debugSource && (
+            <details className="bg-white border border-[#e2e8f0] rounded-xl">
+              <summary className="cursor-pointer px-4 py-3 text-sm text-[#64748b] hover:text-[#1e293b]">
+                عرض النص المُستخرج من الملف (لمراجعة كيف قرأ النظام الفاتورة)
+              </summary>
+              <pre className="px-4 pb-4 text-xs text-[#1e293b] whitespace-pre-wrap font-mono overflow-x-auto max-h-96 overflow-y-auto" dir="ltr">{data.debugSource}</pre>
+            </details>
+          )}
 
           {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
 

@@ -16,6 +16,8 @@ export interface ParsedInvoice {
   invoiceDate: string | null;
   totalAmount: number | null;
   currency: "ILS" | "USD" | "JOD";
+  /** Raw text the model was given (PDF/xlsx only) — exposed so the form can show it for debugging. */
+  _debugSource?: string;
 }
 
 const SYSTEM_PROMPT = `You read purchase invoices for an electronics shop in Palestine and return ONLY a JSON object that matches this exact shape:
@@ -152,7 +154,7 @@ export async function parseInvoiceFromPdf(buffer: Buffer): Promise<ParsedInvoice
   });
   const merged = pages.join("\n\n");
   if (!merged.trim()) throw new Error("لم نتمكن من قراءة نص الفاتورة من ملف PDF (قد يكون ممسوحًا ضوئيًا — جرّب رفعه كصورة)");
-  return callGroq(
+  const parsed = await callGroq(
     TEXT_MODEL,
     [
       { role: "system", content: SYSTEM_PROMPT },
@@ -163,6 +165,8 @@ export async function parseInvoiceFromPdf(buffer: Buffer): Promise<ParsedInvoice
     ],
     { jsonMode: true }
   );
+  parsed._debugSource = merged;
+  return parsed;
 }
 
 export async function parseInvoiceFromXlsx(buffer: Buffer): Promise<ParsedInvoice> {
@@ -172,7 +176,7 @@ export async function parseInvoiceFromXlsx(buffer: Buffer): Promise<ParsedInvoic
     const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
     return `### Sheet: ${name}\n${csv}`;
   }).join("\n\n");
-  return callGroq(
+  const parsed = await callGroq(
     TEXT_MODEL,
     [
       { role: "system", content: SYSTEM_PROMPT },
@@ -183,4 +187,6 @@ export async function parseInvoiceFromXlsx(buffer: Buffer): Promise<ParsedInvoic
     ],
     { jsonMode: true }
   );
+  parsed._debugSource = sheets;
+  return parsed;
 }
