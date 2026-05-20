@@ -43,7 +43,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, icon } = parsed.data;
+    const { icon } = parsed.data;
+    const name = parsed.data.name.trim();
+
+    const existing = await prisma.category.findFirst({
+      where: {
+        name: { equals: name, mode: "insensitive" },
+        isDeleted: false,
+      },
+      select: { id: true, name: true },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        {
+          error: `فئة بنفس الاسم موجودة مسبقًا: ${existing.name}`,
+          existingCategoryId: existing.id,
+        },
+        { status: 409 }
+      );
+    }
+
     const slug =
       parsed.data.slug ??
       name
@@ -53,14 +73,6 @@ export async function POST(request: NextRequest) {
         .slice(0, 50) +
         "-" +
         Date.now();
-
-    const existing = await prisma.category.findFirst({
-      where: { slug, isDeleted: false },
-    });
-
-    if (existing) {
-      return NextResponse.json({ error: "الفئة موجودة مسبقًا" }, { status: 409 });
-    }
 
     const category = await prisma.category.create({
       data: { name, slug, icon },

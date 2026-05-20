@@ -44,9 +44,31 @@ export async function PUT(
       return NextResponse.json({ error: "بيانات غير صالحة" }, { status: 400 });
     }
 
+    const normalizedName = parsed.data.name?.trim();
+
+    if (normalizedName) {
+      const existing = await prisma.category.findFirst({
+        where: {
+          name: { equals: normalizedName, mode: "insensitive" },
+          isDeleted: false,
+          NOT: { id },
+        },
+        select: { id: true, name: true },
+      });
+      if (existing) {
+        return NextResponse.json(
+          {
+            error: `فئة أخرى بنفس الاسم موجودة: ${existing.name}`,
+            existingCategoryId: existing.id,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const category = await prisma.category.update({
       where: { id },
-      data: parsed.data,
+      data: { ...parsed.data, name: normalizedName ?? parsed.data.name },
     });
 
     return NextResponse.json(category);
