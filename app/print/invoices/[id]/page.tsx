@@ -22,11 +22,17 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
     include: {
       customer: true,
       items: { include: { product: { select: { id: true, sku: true } } } },
+      ticket: { select: { ticketNumber: true, deviceType: true, deviceBrand: true, deviceModel: true } },
     },
   });
   if (!invoice) notFound();
 
   const currencySymbol = invoice.currency === "ILS" ? "₪" : invoice.currency === "USD" ? "$" : "JD";
+  const saleItems = invoice.items.filter((i) => i.source === "SALE");
+  const ticketItems = invoice.items.filter((i) => i.source !== "SALE");
+  const saleSubtotal = saleItems.reduce((s, i) => s + Number(i.total), 0);
+  const ticketSubtotal = ticketItems.reduce((s, i) => s + Number(i.total), 0);
+  const hasTicketSection = ticketItems.length > 0;
 
   return (
     <>
@@ -110,46 +116,114 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
           {invoice.customer.address && <p className="text-sm text-[#64748b]">{invoice.customer.address}</p>}
         </div>
 
-        {/* Items */}
-        <table className="w-full text-sm mb-6" style={{ tableLayout: "fixed" }}>
-          <colgroup>
-            <col style={{ width: "5%" }} />
-            <col />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "15%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "15%" }} />
-          </colgroup>
-          <thead>
-            <tr className="bg-[#104e98] text-white">
-              <th className="text-right px-3 py-2.5 rounded-tr-lg">#</th>
-              <th className="text-right px-3 py-2.5">الصنف</th>
-              <th className="text-center px-3 py-2.5">الكمية</th>
-              <th className="text-left px-3 py-2.5">سعر الوحدة</th>
-              <th className="text-left px-3 py-2.5">الخصم</th>
-              <th className="text-left px-3 py-2.5 rounded-tl-lg">الإجمالي</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoice.items.map((item, i) => (
-              <tr key={item.id} className={i % 2 === 0 ? "bg-white" : "bg-[#f8fafc]"}>
-                <td className="px-3 py-2.5 text-[#94a3b8]">{i + 1}</td>
-                <td className="px-3 py-2.5 font-medium text-[#1e293b] break-words">
-                  {item.name}
-                  {item.product?.sku && <span className="text-xs text-[#94a3b8] mr-1 ltr">({item.product.sku})</span>}
-                </td>
-                <td className="px-3 py-2.5 text-center">{item.qty}</td>
-                <td className="px-3 py-2.5 ltr text-left">{currencySymbol}{Number(item.unitPrice).toFixed(2)}</td>
-                <td className="px-3 py-2.5 ltr text-left text-red-500">
-                  {Number(item.discount) > 0 && `${currencySymbol}${Number(item.discount).toFixed(2)}`}
-                </td>
-                <td className="px-3 py-2.5 ltr text-left font-medium">
-                  {currencySymbol}{Number(item.total).toFixed(2)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {/* Sale section */}
+        {(saleItems.length > 0 || !hasTicketSection) && (
+          <>
+            {hasTicketSection && (
+              <h3 className="text-sm font-bold text-[#0b2345] mb-2 bg-[#e8f0fc] px-3 py-1.5 rounded-md inline-block">
+                قسم البيع
+              </h3>
+            )}
+            <table className="w-full text-sm mb-6" style={{ tableLayout: "fixed" }}>
+              <colgroup>
+                <col style={{ width: "5%" }} />
+                <col />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "15%" }} />
+              </colgroup>
+              <thead>
+                <tr className="bg-[#104e98] text-white">
+                  <th className="text-right px-3 py-2.5 rounded-tr-lg">#</th>
+                  <th className="text-right px-3 py-2.5">الصنف</th>
+                  <th className="text-center px-3 py-2.5">الكمية</th>
+                  <th className="text-left px-3 py-2.5">سعر الوحدة</th>
+                  <th className="text-left px-3 py-2.5">الخصم</th>
+                  <th className="text-left px-3 py-2.5 rounded-tl-lg">الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {saleItems.map((item, i) => (
+                  <tr key={item.id} className={i % 2 === 0 ? "bg-white" : "bg-[#f8fafc]"}>
+                    <td className="px-3 py-2.5 text-[#94a3b8]">{i + 1}</td>
+                    <td className="px-3 py-2.5 font-medium text-[#1e293b] break-words">
+                      {item.name}
+                      {item.product?.sku && <span className="text-xs text-[#94a3b8] mr-1 ltr">({item.product.sku})</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-center">{item.qty}</td>
+                    <td className="px-3 py-2.5 ltr text-left">{currencySymbol}{Number(item.unitPrice).toFixed(2)}</td>
+                    <td className="px-3 py-2.5 ltr text-left text-red-500">
+                      {Number(item.discount) > 0 && `${currencySymbol}${Number(item.discount).toFixed(2)}`}
+                    </td>
+                    <td className="px-3 py-2.5 ltr text-left font-medium">
+                      {currencySymbol}{Number(item.total).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+                {hasTicketSection && (
+                  <tr className="bg-[#f1f5f9] font-semibold">
+                    <td colSpan={5} className="px-3 py-2 text-right text-[#0b2345]">مجموع البيع</td>
+                    <td className="px-3 py-2 ltr text-left text-[#0b2345]">{currencySymbol}{saleSubtotal.toFixed(2)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {/* Ticket section */}
+        {hasTicketSection && (
+          <>
+            <h3 className="text-sm font-bold text-[#0b2345] mb-2 bg-orange-100 px-3 py-1.5 rounded-md inline-flex items-center gap-2">
+              قسم الصيانة
+              {invoice.ticket && <span className="text-xs text-[#64748b] ltr">{invoice.ticket.ticketNumber}</span>}
+            </h3>
+            <table className="w-full text-sm mb-6" style={{ tableLayout: "fixed" }}>
+              <colgroup>
+                <col style={{ width: "5%" }} />
+                <col />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "15%" }} />
+              </colgroup>
+              <thead>
+                <tr className="bg-orange-500 text-white">
+                  <th className="text-right px-3 py-2.5 rounded-tr-lg">#</th>
+                  <th className="text-right px-3 py-2.5">الصنف</th>
+                  <th className="text-center px-3 py-2.5">الكمية</th>
+                  <th className="text-left px-3 py-2.5">سعر الوحدة</th>
+                  <th className="text-left px-3 py-2.5">الخصم</th>
+                  <th className="text-left px-3 py-2.5 rounded-tl-lg">الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ticketItems.map((item, i) => (
+                  <tr key={item.id} className={i % 2 === 0 ? "bg-white" : "bg-orange-50/50"}>
+                    <td className="px-3 py-2.5 text-[#94a3b8]">{i + 1}</td>
+                    <td className="px-3 py-2.5 font-medium text-[#1e293b] break-words">
+                      {item.name}
+                      {item.source === "TICKET_LABOR" && <span className="text-xs text-[#94a3b8] mr-1">(أجور)</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-center">{item.qty}</td>
+                    <td className="px-3 py-2.5 ltr text-left">{currencySymbol}{Number(item.unitPrice).toFixed(2)}</td>
+                    <td className="px-3 py-2.5 ltr text-left text-red-500">
+                      {Number(item.discount) > 0 && `${currencySymbol}${Number(item.discount).toFixed(2)}`}
+                    </td>
+                    <td className="px-3 py-2.5 ltr text-left font-medium">
+                      {currencySymbol}{Number(item.total).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-orange-100 font-semibold">
+                  <td colSpan={5} className="px-3 py-2 text-right text-[#0b2345]">مجموع الصيانة</td>
+                  <td className="px-3 py-2 ltr text-left text-[#0b2345]">{currencySymbol}{ticketSubtotal.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </>
+        )}
 
         {/* Totals */}
         <div className="flex justify-end mb-6" style={{ pageBreakInside: "avoid" }}>

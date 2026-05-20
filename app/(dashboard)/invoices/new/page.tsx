@@ -11,6 +11,23 @@ import { ProductLineSelector } from "@/components/invoices/ProductLineSelector";
 import { CURRENCY_LABELS } from "@/lib/constants";
 import type { Currency } from "@prisma/client";
 
+type ItemSource = "SALE" | "TICKET_PART" | "TICKET_LABOR";
+
+interface TicketPart {
+  name: string;
+  productId?: string | null;
+  qty: number;
+  unitCost: number;
+}
+
+interface UnbilledTicket {
+  id: string;
+  ticketNumber: string;
+  status: string;
+  finalCost: number | null;
+  deviceLabel: string;
+}
+
 interface LineItem {
   id: string;
   productId: string;
@@ -18,11 +35,12 @@ interface LineItem {
   qty: number;
   unitPrice: number;
   discount: number;
+  source: ItemSource;
 }
 
 let itemCounter = 0;
-function newItem(): LineItem {
-  return { id: `item-${++itemCounter}`, productId: "", name: "", qty: 1, unitPrice: 0, discount: 0 };
+function newItem(source: ItemSource = "SALE"): LineItem {
+  return { id: `item-${++itemCounter}`, productId: "", name: "", qty: 1, unitPrice: 0, discount: 0, source };
 }
 
 function NewInvoiceForm() {
@@ -41,50 +59,80 @@ function NewInvoiceForm() {
   const [paidAmount, setPaidAmount] = useState(0);
   const [loading, setLoading] = useState<"draft" | "issue" | null>(null);
   const [error, setError] = useState("");
-  const [ticketNumber, setTicketNumber] = useState("");
-  const [ticketLoading, setTicketLoading] = useState(!!ticketId);
+  const [attachedTicket, setAttachedTicket] = useState<{ id: string; ticketNumber: string } | null>(null);
+  // Tickets owned by the chosen customer that are ready/billable but not yet linked to any invoice
+  const [unbilledTickets, setUnbilledTickets] = useState<UnbilledTicket[]>([]);
+  const [dismissedTicketIds, setDismissedTicketIds] = useState<Set<string>>(new Set());
 
+  const attachTicket = useCallback(async (tid: string) => {
+    const res = await fetch(`/api/tickets/${tid}`);
+    if (!res.ok) return;
+    const t = await res.json();
+    const parts: TicketPart[] = t.parts ?? [];
+    const partsTotal = parts.reduce((s, p) => s + p.qty * Number(p.unitCost), 0);
+    const finalCost = Number(t.finalCost ?? 0);
+    const deposit = Number(t.depositPaid ?? 0);
+    const laborCost = Math.max(0, finalCost - partsTotal);
+    const ticketLines: LineItem[] = parts.map((p) => ({
+      id: `item-${++itemCounter}`,
+      productId: p.productId ?? "",
+      name: p.name,
+      qty: p.qty,
+      unitPrice: Number(p.unitCost),
+      discount: 0,
+      source: "TICKET_PART" as const,
+    }));
+    if (laborCost > 0 || ticketLines.length === 0) {
+      ticketLines.push({
+        id: `item-${++itemCounter}`,
+        productId: "",
+        name: `أجور صيانة (${t.ticketNumber})`,
+        qty: 1,
+        unitPrice: laborCost,
+        discount: 0,
+        source: "TICKET_LABOR" as const,
+      });
+    }
+    setItems((prev) => {
+      const saleItems = prev.filter((i) => i.source === "SALE");
+      // Drop empty placeholder SALE rows when attaching a ticket
+      const cleanedSale = saleItems.filter((i) => i.name.trim() || i.unitPrice > 0);
+      return [...cleanedSale, ...ticketLines];
+    });
+    if (deposit > 0) setPaidAmount((cur) => cur + deposit);
+    setAttachedTicket({ id: t.id, ticketNumber: t.ticketNumber });
+    setUnbilledTickets((prev) => prev.filter((u) => u.id !== t.id));
+  }, []);
+
+  // Auto-attach when arriving with ?ticketId=...
   useEffect(() => {
     if (!ticketId) return;
+    attachTicket(ticketId);
+  }, [ticketId, attachTicket]);
+
+  // When the customer changes, look for unbilled tickets and offer to attach them
+  useEffect(() => {
+    if (!customerId) { setUnbilledTickets([]); return; }
+    if (attachedTicket) return;
     let cancelled = false;
     (async () => {
-      const res = await fetch(`/api/tickets/${ticketId}`);
-      if (!res.ok || cancelled) { setTicketLoading(false); return; }
-      const t = await res.json();
-      setTicketNumber(t.ticketNumber);
-      setCustomerId(t.customer.id);
-      const parts: { name: string; productId?: string | null; qty: number; unitCost: number }[] = t.parts ?? [];
-      const partsTotal = parts.reduce((s, p) => s + p.qty * Number(p.unitCost), 0);
-      const finalCost = Number(t.finalCost ?? 0);
-      const deposit = Number(t.depositPaid ?? 0);
-      const laborCost = Math.max(0, finalCost - partsTotal);
-      const lines: LineItem[] = [
-        ...parts.map((p) => ({
-          id: `item-${++itemCounter}`,
-          productId: p.productId ?? "",
-          name: p.name,
-          qty: p.qty,
-          unitPrice: Number(p.unitCost),
-          discount: 0,
-        })),
-      ];
-      if (laborCost > 0 || lines.length === 0) {
-        lines.push({
-          id: `item-${++itemCounter}`,
-          productId: "",
-          name: `أجور صيانة (${t.ticketNumber})`,
-          qty: 1,
-          unitPrice: laborCost,
-          discount: 0,
-        });
-      }
-      setItems(lines);
-      setPaidAmount(deposit);
-      setNotes(`فاتورة صيانة ${t.ticketNumber}`);
-      setTicketLoading(false);
+      const res = await fetch(`/api/tickets?customerId=${customerId}&unbilled=true&all=true`);
+      if (!res.ok || cancelled) return;
+      const data = await res.json();
+      const list: UnbilledTicket[] = (data.tickets ?? [])
+        .filter((t: { status: string; finalCost?: number | null }) => t.status !== "CANCELLED")
+        .map((t: { id: string; ticketNumber: string; status: string; finalCost?: number | null; deviceType?: string; deviceBrand?: string | null; deviceModel?: string | null }) => ({
+          id: t.id,
+          ticketNumber: t.ticketNumber,
+          status: t.status,
+          finalCost: t.finalCost ?? null,
+          deviceLabel: [t.deviceBrand, t.deviceModel].filter(Boolean).join(" "),
+        }))
+        .filter((t: UnbilledTicket) => !dismissedTicketIds.has(t.id));
+      setUnbilledTickets(list);
     })();
     return () => { cancelled = true; };
-  }, [ticketId]);
+  }, [customerId, attachedTicket, dismissedTicketIds]);
 
   const updateItem = useCallback((id: string, field: keyof LineItem, value: string | number) => {
     setItems((prev) =>
@@ -98,7 +146,7 @@ function NewInvoiceForm() {
 
   const addProductLine = useCallback((product: { id: string; name: string; sellPrice: number }) => {
     setItems((prev) => {
-      const empty = prev.find((i) => !i.name && i.unitPrice === 0);
+      const empty = prev.find((i) => i.source === "SALE" && !i.name && i.unitPrice === 0);
       if (empty) {
         return prev.map((i) =>
           i.id === empty.id
@@ -106,9 +154,20 @@ function NewInvoiceForm() {
             : i
         );
       }
-      return [...prev, { id: `item-${++itemCounter}`, productId: product.id, name: product.name, qty: 1, unitPrice: Number(product.sellPrice), discount: 0 }];
+      return [...prev, { id: `item-${++itemCounter}`, productId: product.id, name: product.name, qty: 1, unitPrice: Number(product.sellPrice), discount: 0, source: "SALE" as const }];
     });
   }, []);
+
+  const detachTicket = useCallback(() => {
+    setItems((prev) => prev.filter((i) => i.source === "SALE"));
+    if (attachedTicket) setDismissedTicketIds((s) => new Set(s).add(attachedTicket.id));
+    setAttachedTicket(null);
+  }, [attachedTicket]);
+
+  const saleItems = items.filter((i) => i.source === "SALE");
+  const ticketItems = items.filter((i) => i.source !== "SALE");
+  const saleSubtotal = saleItems.reduce((s, i) => s + i.qty * i.unitPrice - i.discount, 0);
+  const ticketSubtotal = ticketItems.reduce((s, i) => s + i.qty * i.unitPrice - i.discount, 0);
 
   const subtotal = items.reduce((sum, i) => sum + i.qty * i.unitPrice - i.discount, 0);
   const discAmt = discountPercent > 0 ? subtotal * (discountPercent / 100) : discountAmount;
@@ -136,6 +195,7 @@ function NewInvoiceForm() {
             qty: i.qty,
             unitPrice: i.unitPrice,
             discount: i.discount,
+            source: i.source,
           })),
           discountAmount,
           discountPercent,
@@ -144,7 +204,7 @@ function NewInvoiceForm() {
           notes,
           status,
           paidAmount,
-          ticketId: ticketId || undefined,
+          ticketId: attachedTicket?.id ?? undefined,
         }),
       });
       const data = await res.json();
@@ -160,7 +220,7 @@ function NewInvoiceForm() {
   return (
     <div className="max-w-4xl space-y-6">
       <PageHeader
-        title={ticketNumber ? `فاتورة من تذكرة ${ticketNumber}` : "فاتورة جديدة"}
+        title={attachedTicket ? `فاتورة جديدة + تذكرة ${attachedTicket.ticketNumber}` : "فاتورة جديدة"}
         breadcrumb={[
           { label: "الرئيسية", href: "/dashboard" },
           { label: "الفواتير", href: "/invoices" },
@@ -168,14 +228,42 @@ function NewInvoiceForm() {
         ]}
       />
 
-      {ticketId && (
-        <div className="flex items-center gap-2 text-sm bg-orange-50 border border-orange-200 text-orange-700 rounded-lg px-3 py-2">
-          <Wrench className="h-4 w-4 flex-shrink-0" />
-          <span>
-            {ticketLoading
-              ? "جاري تحميل بيانات التذكرة..."
-              : `تم تعبئة القطع والأجور من التذكرة. إصدار الفاتورة سيُسلِّم التذكرة تلقائيًا.`}
+      {!attachedTicket && unbilledTickets.length > 0 && (
+        <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm text-orange-800">
+          <p className="font-semibold mb-1.5 flex items-center gap-2">
+            <Wrench className="h-4 w-4" />
+            هذا العميل لديه {unbilledTickets.length === 1 ? "تذكرة صيانة" : `${unbilledTickets.length} تذاكر`} غير مفوترة
+          </p>
+          <ul className="space-y-1.5">
+            {unbilledTickets.map((t) => (
+              <li key={t.id} className="flex items-center justify-between gap-2 bg-white/60 rounded-md px-2 py-1.5">
+                <span className="ltr font-medium text-[#0b2345]">
+                  {t.ticketNumber}
+                  {t.deviceLabel && <span className="text-xs text-[#64748b] mr-2 rtl">({t.deviceLabel})</span>}
+                </span>
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="outline" onClick={() => setDismissedTicketIds((s) => new Set(s).add(t.id))}>
+                    تجاهل
+                  </Button>
+                  <Button size="sm" onClick={() => attachTicket(t.id)}>
+                    ضمّ للفاتورة
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {attachedTicket && (
+        <div className="flex items-center justify-between gap-2 text-sm bg-orange-50 border border-orange-200 text-orange-800 rounded-lg px-3 py-2">
+          <span className="flex items-center gap-2">
+            <Wrench className="h-4 w-4 flex-shrink-0" />
+            تم ضمّ تذكرة <span className="ltr font-semibold">{attachedTicket.ticketNumber}</span>. إصدار الفاتورة سيُسلِّم التذكرة تلقائيًا.
           </span>
+          <button onClick={detachTicket} className="text-orange-700 hover:text-orange-900 text-xs underline">
+            إزالة
+          </button>
         </div>
       )}
 
@@ -200,8 +288,8 @@ function NewInvoiceForm() {
         </div>
       </SectionCard>
 
-      {/* Line Items */}
-      <SectionCard title="الأصناف">
+      {/* Sale items */}
+      <SectionCard title={attachedTicket ? `أصناف البيع · ₪${saleSubtotal.toFixed(2)}` : "الأصناف"}>
         <div className="space-y-3">
           <div className="hidden md:grid grid-cols-[2fr_80px_120px_100px_100px_36px] gap-2 px-1 text-xs font-medium text-[#64748b]">
             <span>الصنف</span>
@@ -212,7 +300,7 @@ function NewInvoiceForm() {
             <span></span>
           </div>
 
-          {items.map((item) => {
+          {saleItems.map((item) => {
             const lineTotal = item.qty * item.unitPrice - item.discount;
             return (
               <div key={item.id} className="grid grid-cols-1 md:grid-cols-[2fr_80px_120px_100px_100px_36px] gap-2 items-center">
@@ -273,6 +361,38 @@ function NewInvoiceForm() {
           </div>
         </div>
       </SectionCard>
+
+      {/* Ticket items section (read-only, only when a ticket is attached) */}
+      {attachedTicket && ticketItems.length > 0 && (
+        <SectionCard
+          title={`أصناف الصيانة · ₪${ticketSubtotal.toFixed(2)}`}
+          action={
+            <span className="text-xs text-[#94a3b8] flex items-center gap-1 ltr">
+              <Wrench className="h-3.5 w-3.5" />
+              {attachedTicket.ticketNumber}
+            </span>
+          }
+        >
+          <div className="space-y-2 text-sm">
+            {ticketItems.map((item) => {
+              const lineTotal = item.qty * item.unitPrice - item.discount;
+              return (
+                <div key={item.id} className="grid grid-cols-[1fr_60px_100px_100px] gap-2 items-center py-1.5 border-b border-[#f8fafc] last:border-0">
+                  <span className="text-[#1e293b] break-words">
+                    {item.name}
+                    {item.source === "TICKET_LABOR" && (
+                      <span className="text-xs text-[#94a3b8] mr-1">(أجور)</span>
+                    )}
+                  </span>
+                  <span className="text-center text-[#64748b]">{item.qty}</span>
+                  <span className="ltr text-left text-[#64748b]">₪{item.unitPrice.toFixed(2)}</span>
+                  <span className="ltr text-left font-medium text-[#0b2345]">₪{lineTotal.toFixed(2)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </SectionCard>
+      )}
 
       {/* Totals */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

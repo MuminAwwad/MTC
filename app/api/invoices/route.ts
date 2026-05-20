@@ -160,6 +160,7 @@ export async function POST(req: NextRequest) {
               qty: number;
               unitPrice: number;
               discount?: number;
+              source?: "SALE" | "TICKET_PART" | "TICKET_LABOR";
             }) => ({
               productId: item.productId ?? null,
               name: item.name,
@@ -167,6 +168,7 @@ export async function POST(req: NextRequest) {
               unitPrice: item.unitPrice,
               discount: item.discount ?? 0,
               total: item.qty * item.unitPrice - (item.discount ?? 0),
+              source: item.source ?? "SALE",
             })),
           },
         },

@@ -27,6 +27,12 @@ enum InvoiceStatus {
   CANCELLED
 }
 
+enum InvoiceItemSource {
+  SALE
+  TICKET_PART
+  TICKET_LABOR
+}
+
 enum TicketStatus {
   RECEIVED
   DIAGNOSING
@@ -240,6 +246,8 @@ model InvoiceItem {
   unitPrice Decimal @db.Decimal(10, 2)
   discount  Decimal @db.Decimal(10, 2) @default(0)
   total     Decimal @db.Decimal(10, 2)
+
+  source InvoiceItemSource @default(SALE)
 }
 
 // ─── MaintenanceTicket ────────────────────────────────────────────────────────

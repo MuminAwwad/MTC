@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status") as TicketStatus | null;
     const priority = searchParams.get("priority") as TicketPriority | null;
     const customerId = searchParams.get("customerId") ?? "";
+    const unbilled = searchParams.get("unbilled") === "true";
     const all = searchParams.get("all") === "true";
 
     const where = {
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
       ...(status ? { status } : {}),
       ...(priority ? { priority } : {}),
       ...(customerId ? { customerId } : {}),
+      ...(unbilled ? { invoice: { is: null } } : {}),
       ...(search
         ? {
             OR: [
