@@ -14,6 +14,10 @@ export async function GET(req: NextRequest) {
 
     const where = {
       isDeleted: false,
+      // Hide debts whose linked invoice was cancelled. NOT { invoice: ... }
+      // is false only when an invoice exists AND its status matches; debts
+      // with no invoice (invoiceId null) pass through unaffected.
+      NOT: { invoice: { status: "CANCELLED" as const } },
       ...(status ? { status } : {}),
       ...(customerId ? { customerId } : {}),
       ...(search

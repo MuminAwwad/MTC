@@ -122,6 +122,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             });
           }
         }
+
+        // Soft-delete any debt auto-created when the invoice was issued.
+        // Existing DebtPayment rows stay as the historical record — refunds
+        // (if any) are a separate accounting decision.
+        await tx.debt.updateMany({
+          where: { invoiceId: id, isDeleted: false },
+          data: { isDeleted: true },
+        });
       }
 
       return tx.invoice.update({
