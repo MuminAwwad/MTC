@@ -18,7 +18,10 @@ export async function GET(req: NextRequest) {
       // is false only when an invoice exists AND its status matches; debts
       // with no invoice (invoiceId null) pass through unaffected.
       NOT: { invoice: { status: "CANCELLED" as const } },
-      ...(status ? { status } : {}),
+      // Default view is unpaid debts only. The PAID tab is an explicit
+      // opt-in to view history; otherwise the list matches the definition
+      // of "debt" = customer money still owed.
+      ...(status ? { status } : { status: { not: "PAID" as const } }),
       ...(customerId ? { customerId } : {}),
       ...(search
         ? { customer: { name: { contains: search, mode: "insensitive" as const } } }
@@ -40,17 +43,28 @@ export async function GET(req: NextRequest) {
       prisma.debt.count({ where }),
     ]);
 
-    const summary = await prisma.debt.aggregate({
-      where: { isDeleted: false, status: { not: "PAID" } },
-      _sum: { amount: true },
+    // Outstanding = sum(debt.amount) − sum(payments). A PARTIAL debt
+    // already has some payments recorded, so summing `amount` alone
+    // over-reports what customers still owe.
+    const outstandingRows = await prisma.debt.findMany({
+      where: {
+        isDeleted: false,
+        status: { not: "PAID" },
+        NOT: { invoice: { status: "CANCELLED" as const } },
+      },
+      select: { amount: true, payments: { select: { amount: true } } },
     });
+    const totalOutstanding = outstandingRows.reduce((sum, d) => {
+      const paid = d.payments.reduce((s, p) => s + Number(p.amount), 0);
+      return sum + Number(d.amount) - paid;
+    }, 0);
 
     return ok({
       debts,
       total,
       page,
       pageCount: Math.ceil(total / ITEMS_PER_PAGE),
-      totalOutstanding: Number(summary._sum.amount ?? 0),
+      totalOutstanding,
     });
   } catch (e) {
     console.error(e);

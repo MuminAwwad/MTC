@@ -9,7 +9,7 @@ async function getStats() {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const [todayInvoices, openTickets, lowStockCount, totalDebt] = await Promise.all([
+  const [todayInvoices, openTickets, lowStockCount, openDebts] = await Promise.all([
     prisma.invoice.aggregate({
       where: {
         createdAt: { gte: today, lt: tomorrow },
@@ -24,22 +24,31 @@ async function getStats() {
         isDeleted: false,
       },
     }),
-    prisma.$queryRaw<[{ count: bigint }]>`
-      SELECT COUNT(*)::int AS count FROM "Product"
-      WHERE "isActive" = true AND "isDeleted" = false
-      AND "stockQty" <= "minStockQty"
-    `.then(([r]) => Number(r.count)),
-    prisma.debt.aggregate({
-      where: { status: { in: ["PENDING", "PARTIAL"] }, isDeleted: false },
-      _sum: { amount: true },
+    prisma.product.count({
+      where: { isActive: true, isDeleted: false, stockQty: { lte: 0 } },
+    }),
+    // Outstanding = sum(amount) − sum(payments) so PARTIAL debts
+    // only count for what's still owed.
+    prisma.debt.findMany({
+      where: {
+        status: { in: ["PENDING", "PARTIAL"] },
+        isDeleted: false,
+        NOT: { invoice: { status: "CANCELLED" as const } },
+      },
+      select: { amount: true, payments: { select: { amount: true } } },
     }),
   ]);
+
+  const totalDebt = openDebts.reduce((sum, d) => {
+    const paid = d.payments.reduce((s, p) => s + Number(p.amount), 0);
+    return sum + Number(d.amount) - paid;
+  }, 0);
 
   return {
     todayRevenue: Number(todayInvoices._sum.total ?? 0),
     openTickets,
-    lowStockCount: typeof lowStockCount === "number" ? lowStockCount : 0,
-    totalDebt: Number(totalDebt._sum.amount ?? 0),
+    lowStockCount,
+    totalDebt,
   };
 }
 
