@@ -137,6 +137,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         data: {
           ...(newStatus ? { status: newStatus as InvoiceStatus } : {}),
           ...(notes !== undefined ? { notes } : {}),
+          // A cancelled invoice owes nothing. total / paidAmount stay for
+          // historical reference (and any refund tracking later).
+          ...(newStatus === "CANCELLED" ? { remainingAmount: 0 } : {}),
         },
         include: {
           customer: true,

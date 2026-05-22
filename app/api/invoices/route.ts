@@ -54,7 +54,12 @@ export async function GET(req: NextRequest) {
     ]);
 
     const summary = await prisma.invoice.aggregate({
-      where: { isDeleted: false, ...(status ? { status } : {}) },
+      // Exclude CANCELLED from the totals — they no longer represent money
+      // owed/earned. The "Cancelled" filter tab can still opt-in.
+      where: {
+        isDeleted: false,
+        ...(status ? { status } : { status: { not: "CANCELLED" } }),
+      },
       _sum: { total: true, paidAmount: true, remainingAmount: true },
     });
 
