@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
+import { requireUser } from "@/lib/auth";
 
 const schema = z.object({
   name: z.string().min(1).optional(),
@@ -14,21 +15,23 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
 
     const customer = await prisma.customer.findFirst({
-      where: { id, isDeleted: false },
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
     });
 
     if (!customer) {
       return ok({ error: "العميل غير موجود" }, { status: 404 });
     }
 
-    // Fetch related data in parallel
     const [invoices, tickets, debts, spentAgg] = await Promise.all([
       prisma.invoice.findMany({
-        where: { customerId: id, isDeleted: false },
+        where: { customerId: id, ownerId: ctx.dbUser.id, isDeleted: false },
         orderBy: { createdAt: "desc" },
         take: 20,
         select: {
@@ -43,7 +46,7 @@ export async function GET(
         },
       }),
       prisma.maintenanceTicket.findMany({
-        where: { customerId: id, isDeleted: false },
+        where: { customerId: id, ownerId: ctx.dbUser.id, isDeleted: false },
         orderBy: { createdAt: "desc" },
         take: 20,
         select: {
@@ -61,7 +64,7 @@ export async function GET(
         },
       }),
       prisma.debt.findMany({
-        where: { customerId: id, isDeleted: false },
+        where: { customerId: id, ownerId: ctx.dbUser.id, isDeleted: false },
         orderBy: { createdAt: "desc" },
         include: {
           payments: { orderBy: { paidAt: "desc" } },
@@ -71,6 +74,7 @@ export async function GET(
       prisma.invoice.aggregate({
         where: {
           customerId: id,
+          ownerId: ctx.dbUser.id,
           status: { in: ["PAID", "PARTIAL", "ISSUED"] },
           isDeleted: false,
         },
@@ -108,6 +112,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const body = await request.json();
@@ -121,7 +128,12 @@ export async function PUT(
 
     if (normalizedPhone) {
       const existing = await prisma.customer.findFirst({
-        where: { phone: normalizedPhone, isDeleted: false, NOT: { id } },
+        where: {
+          ownerId: ctx.dbUser.id,
+          phone: normalizedPhone,
+          isDeleted: false,
+          NOT: { id },
+        },
         select: { id: true, name: true },
       });
       if (existing) {
@@ -135,11 +147,18 @@ export async function PUT(
       }
     }
 
-    const customer = await prisma.customer.update({
-      where: { id },
+    // updateMany lets us include ownerId in the WHERE so users can't edit
+    // another shop's customer by guessing the id.
+    const result = await prisma.customer.updateMany({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       data: { ...parsed.data, phone: normalizedPhone },
     });
 
+    if (result.count === 0) {
+      return ok({ error: "العميل غير موجود" }, { status: 404 });
+    }
+
+    const customer = await prisma.customer.findUnique({ where: { id } });
     return ok(customer);
   } catch (error) {
     console.error("PUT /api/customers/[id]", error);
@@ -151,12 +170,18 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
-    await prisma.customer.update({
-      where: { id },
+    const result = await prisma.customer.updateMany({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       data: { isDeleted: true },
     });
+    if (result.count === 0) {
+      return ok({ error: "العميل غير موجود" }, { status: 404 });
+    }
     return ok({ success: true });
   } catch (error) {
     console.error("DELETE /api/customers/[id]", error);

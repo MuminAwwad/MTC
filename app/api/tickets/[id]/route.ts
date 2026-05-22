@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { TicketStatus } from "@prisma/client";
+import { requireUser } from "@/lib/auth";
 
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   RECEIVED: ["DIAGNOSING", "CANCELLED"],
@@ -14,10 +15,13 @@ const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
 };
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const ticket = await prisma.maintenanceTicket.findFirst({
-      where: { id, isDeleted: false },
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       include: {
         customer: true,
         parts: { include: { product: { select: { id: true, name: true, sku: true } } }, orderBy: { createdAt: "asc" } },
@@ -35,6 +39,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const body = await req.json();
@@ -50,7 +57,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       estimatedDelivery,
     } = body;
 
-    const ticket = await prisma.maintenanceTicket.findFirst({ where: { id, isDeleted: false } });
+    const ticket = await prisma.maintenanceTicket.findFirst({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    });
     if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
 
     if (newStatus && !VALID_TRANSITIONS[ticket.status].includes(newStatus)) {
@@ -81,7 +90,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
       if (newStatus) {
         await tx.ticketUpdate.create({
-          data: { ticketId: id, status: newStatus as TicketStatus, note: note || null },
+          data: {
+            ticketId: id,
+            status: newStatus as TicketStatus,
+            note: note || null,
+            createdById: ctx.dbUser.id,
+          },
         });
       }
 
@@ -96,9 +110,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
-    const ticket = await prisma.maintenanceTicket.findFirst({ where: { id, isDeleted: false } });
+    const ticket = await prisma.maintenanceTicket.findFirst({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    });
     if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
     if (!["RECEIVED", "CANCELLED"].includes(ticket.status)) {
       return ok({ error: "لا يمكن حذف تذكرة نشطة" }, { status: 400 });

@@ -6,6 +6,9 @@ import { ITEMS_PER_PAGE } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { searchParams } = req.nextUrl;
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
@@ -15,6 +18,7 @@ export async function GET(req: NextRequest) {
     const dateTo = searchParams.get("dateTo");
 
     const where = {
+      ownerId: ctx.dbUser.id,
       isDeleted: false,
       ...(categoryId ? { categoryId } : {}),
       ...(search ? { description: { contains: search, mode: "insensitive" as const } } : {}),
@@ -40,7 +44,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     const summary = await prisma.expense.aggregate({
-      where: { isDeleted: false },
+      where: { ownerId: ctx.dbUser.id, isDeleted: false },
       _sum: { amount: true },
     });
 
@@ -66,8 +70,17 @@ export async function POST(req: NextRequest) {
 
     if (!amount || amount <= 0) return ok({ error: "المبلغ يجب أن يكون أكبر من صفر" }, { status: 400 });
 
+    if (categoryId) {
+      const category = await prisma.expenseCategory.findFirst({
+        where: { id: categoryId, ownerId: ctx.dbUser.id, isDeleted: false },
+        select: { id: true },
+      });
+      if (!category) return ok({ error: "الفئة غير موجودة" }, { status: 404 });
+    }
+
     const expense = await prisma.expense.create({
       data: {
+        ownerId: ctx.dbUser.id,
         categoryId: categoryId || null,
         amount,
         currency: currency as Currency,
@@ -86,9 +99,16 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await req.json();
-    await prisma.expense.update({ where: { id }, data: { isDeleted: true } });
+    const result = await prisma.expense.updateMany({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      data: { isDeleted: true },
+    });
+    if (result.count === 0) return ok({ error: "المصروف غير موجود" }, { status: 404 });
     return ok({ success: true });
   } catch (e) {
     console.error(e);

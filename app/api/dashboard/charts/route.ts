@@ -1,13 +1,20 @@
+import { NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 
 export async function GET() {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+  const ownerId = ctx.dbUser.id;
+
   try {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const invoices = await prisma.invoice.findMany({
       where: {
+        ownerId,
         createdAt: { gte: sevenDaysAgo },
         status: { in: ["PAID", "PARTIAL", "ISSUED"] },
         isDeleted: false,
@@ -15,7 +22,6 @@ export async function GET() {
       select: { createdAt: true, total: true },
     });
 
-    // Group by day
     const salesByDay: Record<string, number> = {};
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -36,10 +42,10 @@ export async function GET() {
       total,
     }));
 
-    // Category breakdown from invoice items
     const items = await prisma.invoiceItem.findMany({
       where: {
         invoice: {
+          ownerId,
           createdAt: { gte: sevenDaysAgo },
           status: { in: ["PAID", "PARTIAL", "ISSUED"] },
           isDeleted: false,

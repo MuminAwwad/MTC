@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
+import { requireUser } from "@/lib/auth";
 
 const schema = z.object({
   name: z.string().min(1).optional(),
@@ -21,10 +22,13 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const product = await prisma.product.findFirst({
-      where: { id, isDeleted: false },
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       include: {
         category: true,
         supplier: true,
@@ -66,6 +70,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const body = await request.json();
@@ -81,7 +88,12 @@ export async function PUT(
 
     if (normalizedSku) {
       const exists = await prisma.product.findFirst({
-        where: { sku: normalizedSku, isDeleted: false, NOT: { id } },
+        where: {
+          ownerId: ctx.dbUser.id,
+          sku: normalizedSku,
+          isDeleted: false,
+          NOT: { id },
+        },
         select: { id: true, name: true },
       });
       if (exists) {
@@ -97,7 +109,12 @@ export async function PUT(
 
     if (normalizedBarcode) {
       const exists = await prisma.product.findFirst({
-        where: { barcode: normalizedBarcode, isDeleted: false, NOT: { id } },
+        where: {
+          ownerId: ctx.dbUser.id,
+          barcode: normalizedBarcode,
+          isDeleted: false,
+          NOT: { id },
+        },
         select: { id: true, name: true },
       });
       if (exists) {
@@ -111,8 +128,8 @@ export async function PUT(
       }
     }
 
-    const product = await prisma.product.update({
-      where: { id },
+    const result = await prisma.product.updateMany({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       data: {
         ...data,
         sku: data.sku === undefined ? undefined : normalizedSku,
@@ -120,6 +137,11 @@ export async function PUT(
       },
     });
 
+    if (result.count === 0) {
+      return ok({ error: "المنتج غير موجود" }, { status: 404 });
+    }
+
+    const product = await prisma.product.findUnique({ where: { id } });
     return ok(product);
   } catch (error) {
     console.error("PUT /api/products/[id]", error);
@@ -131,12 +153,18 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
-    await prisma.product.update({
-      where: { id },
+    const result = await prisma.product.updateMany({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       data: { isDeleted: true, isActive: false },
     });
+    if (result.count === 0) {
+      return ok({ error: "المنتج غير موجود" }, { status: 404 });
+    }
 
     return ok({ success: true });
   } catch (error) {

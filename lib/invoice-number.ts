@@ -1,11 +1,12 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
 
 type TxClient = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
-export async function generateInvoiceNumber(tx: TxClient): Promise<string> {
+// Counters are per-shop: the ownerId is embedded in the counter row's id so
+// two users can each have their own MTC-2026-0001 without colliding.
+export async function generateInvoiceNumber(tx: TxClient, ownerId: string): Promise<string> {
   const year = new Date().getFullYear().toString();
-  const counterId = `invoice-${year}`;
+  const counterId = `${ownerId}:invoice-${year}`;
   const counter = await tx.counter.upsert({
     where: { id: counterId },
     update: { value: { increment: 1 } },
@@ -14,9 +15,9 @@ export async function generateInvoiceNumber(tx: TxClient): Promise<string> {
   return `MTC-${year}-${counter.value.toString().padStart(4, "0")}`;
 }
 
-export async function generateTicketNumber(tx: TxClient): Promise<string> {
+export async function generateTicketNumber(tx: TxClient, ownerId: string): Promise<string> {
   const year = new Date().getFullYear().toString();
-  const counterId = `ticket-${year}`;
+  const counterId = `${ownerId}:ticket-${year}`;
   const counter = await tx.counter.upsert({
     where: { id: counterId },
     update: { value: { increment: 1 } },

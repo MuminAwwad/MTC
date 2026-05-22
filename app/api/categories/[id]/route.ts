@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
+import { requireUser } from "@/lib/auth";
 
 const schema = z.object({
   name: z.string().min(1).optional(),
@@ -12,10 +13,13 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const category = await prisma.category.findFirst({
-      where: { id, isDeleted: false },
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       include: {
         _count: { select: { products: { where: { isDeleted: false } } } },
       },
@@ -36,6 +40,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const body = await request.json();
@@ -50,6 +57,7 @@ export async function PUT(
     if (normalizedName) {
       const existing = await prisma.category.findFirst({
         where: {
+          ownerId: ctx.dbUser.id,
           name: { equals: normalizedName, mode: "insensitive" },
           isDeleted: false,
           NOT: { id },
@@ -67,11 +75,16 @@ export async function PUT(
       }
     }
 
-    const category = await prisma.category.update({
-      where: { id },
+    const result = await prisma.category.updateMany({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       data: { ...parsed.data, name: normalizedName ?? parsed.data.name },
     });
 
+    if (result.count === 0) {
+      return ok({ error: "الفئة غير موجودة" }, { status: 404 });
+    }
+
+    const category = await prisma.category.findUnique({ where: { id } });
     return ok(category);
   } catch (error) {
     console.error("PUT /api/categories/[id]", error);
@@ -83,12 +96,18 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
-    await prisma.category.update({
-      where: { id },
+    const result = await prisma.category.updateMany({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       data: { isDeleted: true },
     });
+    if (result.count === 0) {
+      return ok({ error: "الفئة غير موجودة" }, { status: 404 });
+    }
 
     return ok({ success: true });
   } catch (error) {

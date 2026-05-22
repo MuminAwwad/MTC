@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
+import { requireUser } from "@/lib/auth";
 
 const schema = z.object({
   name: z.string().min(1, "الاسم مطلوب"),
@@ -10,12 +11,16 @@ const schema = z.object({
 });
 
 export async function GET(request: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") ?? "";
 
     const categories = await prisma.category.findMany({
       where: {
+        ownerId: ctx.dbUser.id,
         isDeleted: false,
         ...(search ? { name: { contains: search, mode: "insensitive" } } : {}),
       },
@@ -33,6 +38,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const body = await request.json();
     const parsed = schema.safeParse(body);
@@ -49,6 +57,7 @@ export async function POST(request: NextRequest) {
 
     const existing = await prisma.category.findFirst({
       where: {
+        ownerId: ctx.dbUser.id,
         name: { equals: name, mode: "insensitive" },
         isDeleted: false,
       },
@@ -76,7 +85,7 @@ export async function POST(request: NextRequest) {
         Date.now();
 
     const category = await prisma.category.create({
-      data: { name, slug, icon },
+      data: { ownerId: ctx.dbUser.id, name, slug, icon },
     });
 
     return ok(category, { status: 201 });

@@ -1,14 +1,16 @@
+import { NextResponse } from "next/server";
 import Link from "next/link";
 import { SectionCard, StatusBadge, CurrencyDisplay } from "@/components/shared";
 import { formatDate } from "@/lib/formatters";
 import prisma from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import type { InvoiceStatus } from "@prisma/client";
 
-async function getRecentInvoices() {
+async function getRecentInvoices(ownerId: string) {
   return prisma.invoice.findMany({
-    where: { isDeleted: false },
+    where: { ownerId, isDeleted: false },
     include: { customer: true },
     orderBy: { createdAt: "desc" },
     take: 5,
@@ -19,7 +21,10 @@ export async function RecentInvoices() {
   let invoices: Awaited<ReturnType<typeof getRecentInvoices>> = [];
 
   try {
-    invoices = await getRecentInvoices();
+    const ctx = await requireUser();
+    if (!(ctx instanceof NextResponse)) {
+      invoices = await getRecentInvoices(ctx.dbUser.id);
+    }
   } catch {
     // DB not connected
   }

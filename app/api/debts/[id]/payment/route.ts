@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const debt = await prisma.debt.findFirst({
-      where: { id, isDeleted: false },
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       include: { payments: true },
     });
     if (!debt) return ok({ error: "الدين غير موجود" }, { status: 404 });

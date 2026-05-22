@@ -34,7 +34,7 @@ export async function POST(
 
     const result = await prisma.$transaction(async (tx) => {
       const product = await tx.product.findFirst({
-        where: { id, isDeleted: false },
+        where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
         select: { id: true },
       });
       if (!product) throw new Error("PRODUCT_NOT_FOUND");
@@ -47,13 +47,19 @@ export async function POST(
           data: { stockQty: { increment: qty } },
         });
       } else {
-        // ADJUSTMENT: absolute set
         await tx.product.update({ where: { id }, data: { stockQty: qty } });
       }
 
       const updated = await tx.product.findUnique({ where: { id }, select: { stockQty: true } });
       const movement = await tx.stockMovement.create({
-        data: { productId: id, type, qty, note: note ?? null, createdById: ctx.dbUser.id },
+        data: {
+          ownerId: ctx.dbUser.id,
+          productId: id,
+          type,
+          qty,
+          note: note ?? null,
+          createdById: ctx.dbUser.id,
+        },
       });
       return { movement, newStockQty: updated?.stockQty ?? 0 };
     });

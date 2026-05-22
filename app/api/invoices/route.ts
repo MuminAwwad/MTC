@@ -8,6 +8,9 @@ import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
 import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { searchParams } = req.nextUrl;
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
@@ -18,6 +21,7 @@ export async function GET(req: NextRequest) {
     const dateTo = searchParams.get("dateTo");
 
     const where = {
+      ownerId: ctx.dbUser.id,
       isDeleted: false,
       ...(status ? { status } : {}),
       ...(customerId ? { customerId } : {}),
@@ -57,6 +61,7 @@ export async function GET(req: NextRequest) {
       // Exclude CANCELLED from the totals — they no longer represent money
       // owed/earned. The "Cancelled" filter tab can still opt-in.
       where: {
+        ownerId: ctx.dbUser.id,
         isDeleted: false,
         ...(status ? { status } : { status: { not: "CANCELLED" } }),
       },
@@ -98,14 +103,20 @@ export async function POST(req: NextRequest) {
       status = "DRAFT",
       paidAmount = 0,
       ticketId,
-    } = body;
+      debt: debtDetails,
+    } = body as {
+      paidAmount?: number;
+      ticketId?: string;
+      debt?: { dueDate?: string; notes?: string };
+      [k: string]: unknown;
+    };
 
     if (!customerId) return ok({ error: "العميل مطلوب" }, { status: 400 });
     if (!items || items.length === 0) return ok({ error: "يجب إضافة منتج واحد على الأقل" }, { status: 400 });
 
     if (ticketId) {
-      const existing = await prisma.invoice.findUnique({
-        where: { ticketId },
+      const existing = await prisma.invoice.findFirst({
+        where: { ticketId, ownerId: ctx.dbUser.id },
         select: { id: true, invoiceNumber: true },
       });
       if (existing) {
@@ -114,7 +125,19 @@ export async function POST(req: NextRequest) {
           { status: 409 }
         );
       }
+
+      const ticket = await prisma.maintenanceTicket.findFirst({
+        where: { id: ticketId, ownerId: ctx.dbUser.id, isDeleted: false },
+        select: { id: true },
+      });
+      if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
     }
+
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, ownerId: ctx.dbUser.id, isDeleted: false },
+      select: { id: true },
+    });
+    if (!customer) return ok({ error: "العميل غير موجود" }, { status: 404 });
 
     const subtotal = items.reduce((sum: number, item: { qty: number; unitPrice: number; discount: number }) => {
       const lineTotal = item.qty * item.unitPrice - (item.discount ?? 0);
@@ -129,7 +152,7 @@ export async function POST(req: NextRequest) {
     const remaining = total - paid;
 
     const invoice = await prisma.$transaction(async (tx) => {
-      const invoiceNumber = await generateInvoiceNumber(tx);
+      const invoiceNumber = await generateInvoiceNumber(tx, ctx.dbUser.id);
 
       const invoiceStatus: InvoiceStatus =
         status === "ISSUED"
@@ -142,6 +165,7 @@ export async function POST(req: NextRequest) {
 
       const created = await tx.invoice.create({
         data: {
+          ownerId: ctx.dbUser.id,
           invoiceNumber,
           customerId,
           createdById: ctx.dbUser.id,
@@ -189,6 +213,7 @@ export async function POST(req: NextRequest) {
             await decrementStockOrFail(tx, item.productId, item.qty);
             await tx.stockMovement.create({
               data: {
+                ownerId: ctx.dbUser.id,
                 productId: item.productId,
                 createdById: ctx.dbUser.id,
                 type: "OUT",
@@ -203,12 +228,15 @@ export async function POST(req: NextRequest) {
         if (remaining > 0) {
           await tx.debt.create({
             data: {
+              ownerId: ctx.dbUser.id,
               customerId,
               invoiceId: created.id,
               amount: remaining,
               currency,
               reason: `فاتورة ${invoiceNumber}`,
               status: "PENDING",
+              dueDate: debtDetails?.dueDate ? new Date(debtDetails.dueDate) : null,
+              notes: debtDetails?.notes ?? null,
             },
           });
         }

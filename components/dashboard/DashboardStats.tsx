@@ -1,9 +1,11 @@
+import { NextResponse } from "next/server";
 import { StatCard } from "@/components/shared";
 import { TrendingUp, Wrench, Package, CreditCard } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import prisma from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 
-async function getStats() {
+async function getStats(ownerId: string) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
@@ -12,6 +14,7 @@ async function getStats() {
   const [todayInvoices, openTickets, lowStockCount, openDebts] = await Promise.all([
     prisma.invoice.aggregate({
       where: {
+        ownerId,
         createdAt: { gte: today, lt: tomorrow },
         status: { in: ["PAID", "PARTIAL", "ISSUED"] },
         isDeleted: false,
@@ -20,17 +23,17 @@ async function getStats() {
     }),
     prisma.maintenanceTicket.count({
       where: {
+        ownerId,
         status: { notIn: ["DELIVERED", "CANCELLED"] },
         isDeleted: false,
       },
     }),
     prisma.product.count({
-      where: { isActive: true, isDeleted: false, stockQty: { lte: 0 } },
+      where: { ownerId, isActive: true, isDeleted: false, stockQty: { lte: 0 } },
     }),
-    // Outstanding = sum(amount) − sum(payments) so PARTIAL debts
-    // only count for what's still owed.
     prisma.debt.findMany({
       where: {
+        ownerId,
         status: { in: ["PENDING", "PARTIAL"] },
         isDeleted: false,
         NOT: { invoice: { status: "CANCELLED" as const } },
@@ -56,7 +59,10 @@ export async function DashboardStats() {
   let stats = { todayRevenue: 0, openTickets: 0, lowStockCount: 0, totalDebt: 0 };
 
   try {
-    stats = await getStats();
+    const ctx = await requireUser();
+    if (!(ctx instanceof NextResponse)) {
+      stats = await getStats(ctx.dbUser.id);
+    }
   } catch {
     // DB might not be connected yet — show zeros
   }

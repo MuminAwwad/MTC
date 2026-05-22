@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id, isDeleted: false },
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       include: { debts: { where: { isDeleted: false }, include: { payments: true } } },
     });
 

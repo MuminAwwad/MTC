@@ -56,7 +56,12 @@ function NewInvoiceForm() {
   const [taxPercent, setTaxPercent] = useState(0);
   const [currency, setCurrency] = useState<Currency>("ILS");
   const [notes, setNotes] = useState("");
-  const [paidAmount, setPaidAmount] = useState(0);
+  // Default to "not a debt" (fully paid in cash). The checkbox flips this
+  // and reveals the debt-specific fields (deposit, due date, notes).
+  const [isDebt, setIsDebt] = useState(false);
+  const [partialPaid, setPartialPaid] = useState(0);
+  const [debtDueDate, setDebtDueDate] = useState("");
+  const [debtNotes, setDebtNotes] = useState("");
   const [loading, setLoading] = useState<"draft" | "issue" | null>(null);
   const [error, setError] = useState("");
   const [attachedTicket, setAttachedTicket] = useState<{ id: string; ticketNumber: string } | null>(null);
@@ -99,7 +104,12 @@ function NewInvoiceForm() {
       const cleanedSale = saleItems.filter((i) => i.name.trim() || i.unitPrice > 0);
       return [...cleanedSale, ...ticketLines];
     });
-    if (deposit > 0) setPaidAmount((cur) => cur + deposit);
+    if (deposit > 0) {
+      // Ticket already collected a deposit — flip into "debt" mode and
+      // pre-fill the deposit as the amount paid up-front.
+      setIsDebt(true);
+      setPartialPaid((cur) => cur + deposit);
+    }
     setAttachedTicket({ id: t.id, ticketNumber: t.ticketNumber });
     setUnbilledTickets((prev) => prev.filter((u) => u.id !== t.id));
   }, []);
@@ -174,6 +184,9 @@ function NewInvoiceForm() {
   const taxable = subtotal - discAmt;
   const taxAmt = taxPercent > 0 ? taxable * (taxPercent / 100) : 0;
   const total = taxable + taxAmt;
+  // Not-debt invoices are fully paid. Debt invoices use whatever the
+  // customer paid as a deposit (defaults to 0) and the rest becomes the debt.
+  const paidAmount = isDebt ? Math.min(total, partialPaid) : total;
   const remaining = Math.max(0, total - paidAmount);
 
   const submit = async (status: "DRAFT" | "ISSUED") => {
@@ -205,6 +218,14 @@ function NewInvoiceForm() {
           status,
           paidAmount,
           ticketId: attachedTicket?.id ?? undefined,
+          ...(isDebt && remaining > 0
+            ? {
+                debt: {
+                  dueDate: debtDueDate || undefined,
+                  notes: debtNotes || undefined,
+                },
+              }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -431,17 +452,71 @@ function NewInvoiceForm() {
                 dir="ltr"
               />
             </FormField>
-            <FormField label="المبلغ المدفوع مقدمًا (₪)">
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={paidAmount}
-                onChange={(e) => setPaidAmount(Math.min(total, parseFloat(e.target.value) || 0))}
-                dir="ltr"
-              />
-            </FormField>
           </div>
+
+          <label className="flex items-center gap-3 mt-4 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-[#cbd5e1] text-[#104e98] focus:ring-[#104e98]"
+              checked={isDebt}
+              onChange={(e) => setIsDebt(e.target.checked)}
+            />
+            <span className="text-sm font-medium text-[#1e293b]">
+              هذه الفاتورة دين على العميل
+            </span>
+            <span className="text-xs text-[#64748b]">
+              (سيتم تسجيل المتبقي كدين بدلًا من اعتبار الفاتورة مدفوعة)
+            </span>
+          </label>
+
+          {isDebt && (
+            <div className="mt-4 p-4 bg-orange-50/60 border border-orange-200 rounded-xl space-y-3">
+              <h4 className="text-sm font-semibold text-[#0b2345]">تفاصيل الدين</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormField label="المبلغ المدفوع الآن (₪)">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={partialPaid}
+                    onChange={(e) => setPartialPaid(Math.min(total, parseFloat(e.target.value) || 0))}
+                    placeholder="0.00"
+                    dir="ltr"
+                  />
+                </FormField>
+                <FormField label="تاريخ الاستحقاق">
+                  <Input
+                    type="date"
+                    value={debtDueDate}
+                    onChange={(e) => setDebtDueDate(e.target.value)}
+                    dir="ltr"
+                  />
+                </FormField>
+              </div>
+              <FormField label="ملاحظات الدين (اختياري)">
+                <Textarea
+                  value={debtNotes}
+                  onChange={(e) => setDebtNotes(e.target.value)}
+                  rows={2}
+                  placeholder="مثال: اتفاق على سداد نصف الدين بعد أسبوعين"
+                />
+              </FormField>
+              <dl className="grid grid-cols-3 gap-3 text-xs pt-2 border-t border-orange-200">
+                <div>
+                  <dt className="text-[#64748b]">إجمالي الفاتورة</dt>
+                  <dd className="mt-0.5 font-semibold text-[#0b2345] ltr">₪{total.toFixed(2)}</dd>
+                </div>
+                <div>
+                  <dt className="text-[#64748b]">المدفوع الآن</dt>
+                  <dd className="mt-0.5 font-semibold text-green-600 ltr">₪{paidAmount.toFixed(2)}</dd>
+                </div>
+                <div>
+                  <dt className="text-[#64748b]">الدين المتبقي</dt>
+                  <dd className="mt-0.5 font-semibold text-orange-600 ltr">₪{remaining.toFixed(2)}</dd>
+                </div>
+              </dl>
+            </div>
+          )}
         </SectionCard>
 
         {/* Summary */}

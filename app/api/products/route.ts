@@ -21,6 +21,9 @@ const schema = z.object({
 });
 
 export async function GET(request: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") ?? "";
@@ -31,6 +34,7 @@ export async function GET(request: NextRequest) {
     const all = searchParams.get("all") === "true";
 
     const where = {
+      ownerId: ctx.dbUser.id,
       isDeleted: false,
       ...(search
         ? {
@@ -68,14 +72,12 @@ export async function GET(request: NextRequest) {
       prisma.product.count({ where }),
     ]);
 
-    // Filter low stock in JS (cross-column comparison)
     const filtered = lowStock
       ? products.filter((p) => p.stockQty <= p.minStockQty)
       : products;
 
-    // Low stock total count
     const allProducts = await prisma.product.findMany({
-      where: { isDeleted: false, isActive: true },
+      where: { ownerId: ctx.dbUser.id, isDeleted: false, isActive: true },
       select: { stockQty: true, minStockQty: true },
     });
     const lowStockCount = allProducts.filter(
@@ -118,7 +120,7 @@ export async function POST(request: NextRequest) {
 
     if (normalizedSku) {
       const exists = await prisma.product.findFirst({
-        where: { sku: normalizedSku, isDeleted: false },
+        where: { ownerId: ctx.dbUser.id, sku: normalizedSku, isDeleted: false },
         select: { id: true, name: true },
       });
       if (exists) {
@@ -134,7 +136,7 @@ export async function POST(request: NextRequest) {
 
     if (normalizedBarcode) {
       const exists = await prisma.product.findFirst({
-        where: { barcode: normalizedBarcode, isDeleted: false },
+        where: { ownerId: ctx.dbUser.id, barcode: normalizedBarcode, isDeleted: false },
         select: { id: true, name: true },
       });
       if (exists) {
@@ -151,6 +153,7 @@ export async function POST(request: NextRequest) {
     const product = await prisma.$transaction(async (tx) => {
       const p = await tx.product.create({
         data: {
+          ownerId: ctx.dbUser.id,
           name: data.name,
           sku: normalizedSku,
           barcode: normalizedBarcode,
@@ -166,10 +169,10 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Record initial stock if > 0
       if (data.stockQty > 0) {
         await tx.stockMovement.create({
           data: {
+            ownerId: ctx.dbUser.id,
             productId: p.id,
             createdById: ctx.dbUser.id,
             type: "IN",

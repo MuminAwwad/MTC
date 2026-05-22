@@ -39,13 +39,22 @@ export async function POST(req: NextRequest) {
     }
     const data = parsed.data;
 
+    const ownerId = ctx.dbUser.id;
+
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Resolve supplier — id wins, else phone match, else create
-      let supplierId = data.supplier.id ?? null;
+      // 1. Resolve supplier — id wins (scoped to owner), else phone match, else create
+      let supplierId: string | null = null;
+      if (data.supplier.id) {
+        const owned = await tx.supplier.findFirst({
+          where: { id: data.supplier.id, ownerId, isDeleted: false },
+          select: { id: true },
+        });
+        supplierId = owned?.id ?? null;
+      }
       const phone = data.supplier.phone?.trim() || null;
       if (!supplierId && phone) {
         const existing = await tx.supplier.findFirst({
-          where: { phone, isDeleted: false },
+          where: { ownerId, phone, isDeleted: false },
           select: { id: true },
         });
         if (existing) supplierId = existing.id;
@@ -53,6 +62,7 @@ export async function POST(req: NextRequest) {
       if (!supplierId) {
         const created = await tx.supplier.create({
           data: {
+            ownerId,
             name: data.supplier.name,
             phone,
             company: data.supplier.company ?? null,
@@ -75,10 +85,17 @@ export async function POST(req: NextRequest) {
 
       // 2. For each item: match existing product (by id, then sku) or create new
       for (const item of data.items) {
-        let productId: string | null = item.id ?? null;
+        let productId: string | null = null;
+        if (item.id) {
+          const owned = await tx.product.findFirst({
+            where: { id: item.id, ownerId, isDeleted: false },
+            select: { id: true },
+          });
+          productId = owned?.id ?? null;
+        }
         if (!productId && item.sku) {
           const found = await tx.product.findFirst({
-            where: { sku: item.sku, isDeleted: false },
+            where: { ownerId, sku: item.sku, isDeleted: false },
             select: { id: true },
           });
           if (found) productId = found.id;
@@ -87,6 +104,7 @@ export async function POST(req: NextRequest) {
         if (!productId) {
           const created = await tx.product.create({
             data: {
+              ownerId,
               name: item.name,
               sku: item.sku?.trim() || null,
               costPrice: item.unitCost,
@@ -113,6 +131,7 @@ export async function POST(req: NextRequest) {
 
         await tx.stockMovement.create({
           data: {
+            ownerId,
             productId,
             createdById: ctx.dbUser.id,
             type: "IN",
@@ -128,6 +147,7 @@ export async function POST(req: NextRequest) {
       // 3. Record payable to the supplier
       const payable = await tx.payable.create({
         data: {
+          ownerId,
           supplierId,
           amount: payableTotal,
           currency: "ILS",

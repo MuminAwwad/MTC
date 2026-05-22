@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const debt = await prisma.debt.findFirst({
-      where: { id, isDeleted: false },
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       include: {
         customer: true,
         invoice: { select: { id: true, invoiceNumber: true } },
@@ -22,15 +26,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const { notes, dueDate } = await req.json();
-    const debt = await prisma.debt.update({
-      where: { id },
+    const result = await prisma.debt.updateMany({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       data: {
         ...(notes !== undefined ? { notes } : {}),
         ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
       },
+    });
+    if (result.count === 0) return ok({ error: "الدين غير موجود" }, { status: 404 });
+
+    const debt = await prisma.debt.findUnique({
+      where: { id },
       include: {
         customer: true,
         invoice: { select: { id: true, invoiceNumber: true } },

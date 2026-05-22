@@ -6,10 +6,13 @@ import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
 import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const invoice = await prisma.invoice.findFirst({
-      where: { id, isDeleted: false },
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       include: {
         customer: true,
         items: { include: { product: { select: { id: true, name: true, sku: true } } } },
@@ -38,7 +41,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { status: newStatus, notes } = body;
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id, isDeleted: false },
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       include: { items: true, debts: { where: { isDeleted: false } } },
     });
     if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
@@ -62,6 +65,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             await decrementStockOrFail(tx, item.productId, item.qty);
             await tx.stockMovement.create({
               data: {
+                ownerId: ctx.dbUser.id,
                 productId: item.productId,
                 createdById: ctx.dbUser.id,
                 type: "OUT",
@@ -77,6 +81,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         if (remaining > 0 && invoice.debts.length === 0) {
           await tx.debt.create({
             data: {
+              ownerId: ctx.dbUser.id,
               customerId: invoice.customerId,
               invoiceId: invoice.id,
               amount: remaining,
@@ -112,6 +117,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             });
             await tx.stockMovement.create({
               data: {
+                ownerId: ctx.dbUser.id,
                 productId: item.productId,
                 createdById: ctx.dbUser.id,
                 type: "IN",
@@ -160,9 +166,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
-    const invoice = await prisma.invoice.findFirst({ where: { id, isDeleted: false } });
+    const invoice = await prisma.invoice.findFirst({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    });
     if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
     if (invoice.status !== "DRAFT") {
       return ok({ error: "يمكن حذف المسودات فقط" }, { status: 400 });

@@ -1,15 +1,17 @@
+import { NextResponse } from "next/server";
 import Link from "next/link";
 import { SectionCard, StatusBadge } from "@/components/shared";
 import { formatDate } from "@/lib/formatters";
 import { DEVICE_TYPE_LABELS } from "@/lib/constants";
 import prisma from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import type { TicketStatus, TicketPriority } from "@prisma/client";
 
-async function getRecentTickets() {
+async function getRecentTickets(ownerId: string) {
   return prisma.maintenanceTicket.findMany({
-    where: { isDeleted: false },
+    where: { ownerId, isDeleted: false },
     include: { customer: true },
     orderBy: { createdAt: "desc" },
     take: 5,
@@ -20,7 +22,10 @@ export async function RecentTickets() {
   let tickets: Awaited<ReturnType<typeof getRecentTickets>> = [];
 
   try {
-    tickets = await getRecentTickets();
+    const ctx = await requireUser();
+    if (!(ctx instanceof NextResponse)) {
+      tickets = await getRecentTickets(ctx.dbUser.id);
+    }
   } catch {
     // DB not connected
   }

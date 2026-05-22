@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
+import { requireUser } from "@/lib/auth";
 
 const schema = z.object({
   name: z.string().min(1).optional(),
@@ -14,10 +15,13 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const supplier = await prisma.supplier.findFirst({
-      where: { id, isDeleted: false },
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       include: {
         products: {
           where: { isDeleted: false },
@@ -53,6 +57,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
     const body = await request.json();
@@ -66,7 +73,12 @@ export async function PUT(
 
     if (normalizedPhone) {
       const existing = await prisma.supplier.findFirst({
-        where: { phone: normalizedPhone, isDeleted: false, NOT: { id } },
+        where: {
+          ownerId: ctx.dbUser.id,
+          phone: normalizedPhone,
+          isDeleted: false,
+          NOT: { id },
+        },
         select: { id: true, name: true },
       });
       if (existing) {
@@ -80,11 +92,16 @@ export async function PUT(
       }
     }
 
-    const supplier = await prisma.supplier.update({
-      where: { id },
+    const result = await prisma.supplier.updateMany({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       data: { ...parsed.data, phone: normalizedPhone },
     });
 
+    if (result.count === 0) {
+      return ok({ error: "المورد غير موجود" }, { status: 404 });
+    }
+
+    const supplier = await prisma.supplier.findUnique({ where: { id } });
     return ok(supplier);
   } catch (error) {
     console.error("PUT /api/suppliers/[id]", error);
@@ -96,12 +113,18 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { id } = await params;
-    await prisma.supplier.update({
-      where: { id },
+    const result = await prisma.supplier.updateMany({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
       data: { isDeleted: true },
     });
+    if (result.count === 0) {
+      return ok({ error: "المورد غير موجود" }, { status: 404 });
+    }
     return ok({ success: true });
   } catch (error) {
     console.error("DELETE /api/suppliers/[id]", error);

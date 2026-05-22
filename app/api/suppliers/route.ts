@@ -3,6 +3,7 @@ import { ok } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
+import { requireUser } from "@/lib/auth";
 
 const schema = z.object({
   name: z.string().min(1, "اسم المورد مطلوب"),
@@ -12,6 +13,9 @@ const schema = z.object({
 });
 
 export async function GET(request: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") ?? "";
@@ -20,6 +24,7 @@ export async function GET(request: NextRequest) {
     const all = searchParams.get("all") === "true";
 
     const where = {
+      ownerId: ctx.dbUser.id,
       isDeleted: false,
       ...(search
         ? {
@@ -72,6 +77,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const body = await request.json();
     const parsed = schema.safeParse(body);
@@ -87,7 +95,7 @@ export async function POST(request: NextRequest) {
 
     if (normalizedPhone) {
       const existing = await prisma.supplier.findFirst({
-        where: { phone: normalizedPhone, isDeleted: false },
+        where: { ownerId: ctx.dbUser.id, phone: normalizedPhone, isDeleted: false },
         select: { id: true, name: true },
       });
       if (existing) {
@@ -103,6 +111,7 @@ export async function POST(request: NextRequest) {
 
     const supplier = await prisma.supplier.create({
       data: {
+        ownerId: ctx.dbUser.id,
         name: parsed.data.name,
         phone: normalizedPhone,
         company: parsed.data.company ?? null,

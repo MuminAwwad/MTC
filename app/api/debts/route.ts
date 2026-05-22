@@ -3,8 +3,12 @@ import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { DebtStatus, Currency } from "@prisma/client";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
+import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { searchParams } = req.nextUrl;
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
@@ -13,6 +17,7 @@ export async function GET(req: NextRequest) {
     const customerId = searchParams.get("customerId") ?? "";
 
     const where = {
+      ownerId: ctx.dbUser.id,
       isDeleted: false,
       // Hide debts whose linked invoice was cancelled. NOT { invoice: ... }
       // is false only when an invoice exists AND its status matches; debts
@@ -48,6 +53,7 @@ export async function GET(req: NextRequest) {
     // over-reports what customers still owe.
     const outstandingRows = await prisma.debt.findMany({
       where: {
+        ownerId: ctx.dbUser.id,
         isDeleted: false,
         status: { not: "PAID" },
         NOT: { invoice: { status: "CANCELLED" as const } },
@@ -73,14 +79,24 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { customerId, amount, currency = "ILS", reason, dueDate, notes } = await req.json();
 
     if (!customerId) return ok({ error: "العميل مطلوب" }, { status: 400 });
     if (!amount || amount <= 0) return ok({ error: "المبلغ يجب أن يكون أكبر من صفر" }, { status: 400 });
 
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, ownerId: ctx.dbUser.id, isDeleted: false },
+      select: { id: true },
+    });
+    if (!customer) return ok({ error: "العميل غير موجود" }, { status: 404 });
+
     const debt = await prisma.debt.create({
       data: {
+        ownerId: ctx.dbUser.id,
         customerId,
         amount,
         currency: currency as Currency,

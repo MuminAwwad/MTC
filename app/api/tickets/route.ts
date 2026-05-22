@@ -7,6 +7,9 @@ import { ITEMS_PER_PAGE } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { searchParams } = req.nextUrl;
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
@@ -18,6 +21,7 @@ export async function GET(req: NextRequest) {
     const all = searchParams.get("all") === "true";
 
     const where = {
+      ownerId: ctx.dbUser.id,
       isDeleted: false,
       ...(status ? { status } : {}),
       ...(priority ? { priority } : {}),
@@ -80,10 +84,17 @@ export async function POST(req: NextRequest) {
     if (!deviceType) return ok({ error: "نوع الجهاز مطلوب" }, { status: 400 });
     if (!problemDescription?.trim()) return ok({ error: "وصف المشكلة مطلوب" }, { status: 400 });
 
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, ownerId: ctx.dbUser.id, isDeleted: false },
+      select: { id: true },
+    });
+    if (!customer) return ok({ error: "العميل غير موجود" }, { status: 404 });
+
     const ticket = await prisma.$transaction(async (tx) => {
-      const ticketNumber = await generateTicketNumber(tx);
+      const ticketNumber = await generateTicketNumber(tx, ctx.dbUser.id);
       return tx.maintenanceTicket.create({
         data: {
+          ownerId: ctx.dbUser.id,
           ticketNumber,
           customerId,
           createdById: ctx.dbUser.id,

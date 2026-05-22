@@ -1,62 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 
+// Per-shop isolation: a user only ever sees themselves. The list endpoint
+// returns the current user as a single-element array so any consumer that
+// expected a list still works.
 export async function GET() {
-  const ctx = await requireAdmin();
+  const ctx = await requireUser();
   if (ctx instanceof NextResponse) return ctx;
 
-  const users = await prisma.user.findMany({
-    where: { isDeleted: false },
+  const user = await prisma.user.findUnique({
+    where: { id: ctx.dbUser.id },
     select: { id: true, name: true, email: true, phone: true, role: true, isActive: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
   });
-  return ok(users);
+  return ok(user ? [user] : []);
 }
 
-export async function POST(req: NextRequest) {
-  const ctx = await requireAdmin();
-  if (ctx instanceof NextResponse) return ctx;
-
-  try {
-    const { id, name, email, phone, address, role } = await req.json();
-
-    if (!id || !name || !email) {
-      return ok({ error: "البيانات ناقصة" }, { status: 400 });
-    }
-
-    const normalizedEmail = String(email).trim().toLowerCase();
-
-    const existing = await prisma.user.findFirst({
-      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
-      select: { id: true, name: true, email: true },
-    });
-
-    if (existing) {
-      return ok(
-        {
-          error: `مستخدم بنفس البريد الإلكتروني موجود مسبقًا: ${existing.name}`,
-          existingUserId: existing.id,
-        },
-        { status: 409 }
-      );
-    }
-
-    const user = await prisma.user.create({
-      data: {
-        id,
-        name,
-        email: normalizedEmail,
-        phone: phone ?? null,
-        address: address ?? null,
-        role: role === "ADMIN" ? "ADMIN" : "STAFF",
-      },
-    });
-
-    return ok(user, { status: 201 });
-  } catch (e) {
-    console.error(e);
-    return ok({ error: "خطأ في الخادم" }, { status: 500 });
-  }
+export async function POST() {
+  return ok({ error: "إنشاء المستخدمين يتم عبر التسجيل" }, { status: 405 });
 }

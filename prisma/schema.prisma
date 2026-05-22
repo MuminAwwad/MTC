@@ -99,6 +99,20 @@ model User {
   createdExpenses    Expense[]
   debtPayments       DebtPayment[]
   payablePayments    PayablePayment[]
+
+  // Per-shop ownership. Every domain row points back at exactly one user;
+  // queries scoped by ownerId give each user their own isolated data set.
+  ownedCustomers         Customer[]        @relation("CustomerOwner")
+  ownedSuppliers         Supplier[]        @relation("SupplierOwner")
+  ownedCategories        Category[]        @relation("CategoryOwner")
+  ownedProducts          Product[]         @relation("ProductOwner")
+  ownedStockMovements    StockMovement[]   @relation("StockMovementOwner")
+  ownedInvoices          Invoice[]         @relation("InvoiceOwner")
+  ownedTickets           MaintenanceTicket[] @relation("TicketOwner")
+  ownedDebts             Debt[]            @relation("DebtOwner")
+  ownedPayables          Payable[]         @relation("PayableOwner")
+  ownedExpenses          Expense[]         @relation("ExpenseOwner")
+  ownedExpenseCategories ExpenseCategory[] @relation("ExpenseCategoryOwner")
 }
 
 // ─── Customer ─────────────────────────────────────────────────────────────────
@@ -106,15 +120,21 @@ model User {
 model Customer {
   id        String   @id @default(cuid())
   name      String
-  phone     String?  @unique
+  phone     String?
   address   String?
   notes     String?
   isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  ownerId String
+  owner   User   @relation("CustomerOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
   invoices           Invoice[]
   maintenanceTickets MaintenanceTicket[]
   debts              Debt[]
+
+  @@unique([ownerId, phone])
+  @@index([ownerId])
 }
 
 // ─── Supplier ─────────────────────────────────────────────────────────────────
@@ -122,27 +142,40 @@ model Customer {
 model Supplier {
   id        String   @id @default(cuid())
   name      String
-  phone     String?  @unique
+  phone     String?
   company   String?
   notes     String?
   isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  ownerId String
+  owner   User   @relation("SupplierOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
   products  Product[]
   payables  Payable[]
+
+  @@unique([ownerId, phone])
+  @@index([ownerId])
 }
 
 // ─── Category ─────────────────────────────────────────────────────────────────
 
 model Category {
   id        String    @id @default(cuid())
-  name      String    @unique
-  slug      String    @unique
+  name      String
+  slug      String
   icon      String?
   isDeleted Boolean   @default(false)
   createdAt DateTime  @default(now())
 
+  ownerId String
+  owner   User   @relation("CategoryOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
   products  Product[]
+
+  @@unique([ownerId, name])
+  @@unique([ownerId, slug])
+  @@index([ownerId])
 }
 
 // ─── Product ──────────────────────────────────────────────────────────────────
@@ -150,8 +183,8 @@ model Category {
 model Product {
   id          String   @id @default(cuid())
   name        String
-  sku         String?  @unique
-  barcode     String?  @unique
+  sku         String?
+  barcode     String?
   description String?
   unit        StockUnit @default(PIECE)
 
@@ -160,6 +193,9 @@ model Product {
 
   supplierId  String?
   supplier    Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  ownerId String
+  owner   User   @relation("ProductOwner", fields: [ownerId], references: [id], onDelete: Cascade)
 
   costPrice   Decimal  @db.Decimal(10, 2)
   sellPrice   Decimal  @db.Decimal(10, 2)
@@ -174,6 +210,10 @@ model Product {
   stockMovements StockMovement[]
   invoiceItems   InvoiceItem[]
   ticketParts    TicketPart[]
+
+  @@unique([ownerId, sku])
+  @@unique([ownerId, barcode])
+  @@index([ownerId])
 }
 
 // ─── StockMovement ────────────────────────────────────────────────────────────
@@ -187,16 +227,21 @@ model StockMovement {
   note      String?
   reference String?
 
+  ownerId String
+  owner   User   @relation("StockMovementOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
   createdById String?
   createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
+
+  @@index([ownerId])
 }
 
 // ─── Invoice ──────────────────────────────────────────────────────────────────
 
 model Invoice {
   id            String        @id @default(cuid())
-  invoiceNumber String        @unique
+  invoiceNumber String
   customerId    String
   customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
@@ -217,6 +262,9 @@ model Invoice {
   status  InvoiceStatus @default(DRAFT)
   notes   String?
 
+  ownerId String
+  owner   User   @relation("InvoiceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
   isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
   createdById String?
@@ -229,6 +277,9 @@ model Invoice {
   ticket   MaintenanceTicket? @relation("TicketInvoice", fields: [ticketId], references: [id], onDelete: SetNull)
 
   debts       Debt[]
+
+  @@unique([ownerId, invoiceNumber])
+  @@index([ownerId])
 }
 
 // ─── InvoiceItem ──────────────────────────────────────────────────────────────
@@ -254,9 +305,12 @@ model InvoiceItem {
 
 model MaintenanceTicket {
   id           String         @id @default(cuid())
-  ticketNumber String         @unique
+  ticketNumber String
   customerId   String
   customer     Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  ownerId String
+  owner   User   @relation("TicketOwner", fields: [ownerId], references: [id], onDelete: Cascade)
 
   deviceType   DeviceType
   deviceBrand  String?
@@ -290,6 +344,9 @@ model MaintenanceTicket {
   parts    TicketPart[]
   timeline TicketUpdate[]
   invoice  Invoice?       @relation("TicketInvoice")
+
+  @@unique([ownerId, ticketNumber])
+  @@index([ownerId])
 }
 
 // ─── TicketPart ───────────────────────────────────────────────────────────────
@@ -343,9 +400,14 @@ model Debt {
   dueDate DateTime?
   notes   String?
 
+  ownerId String
+  owner   User   @relation("DebtOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
   payments  DebtPayment[]
   isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([ownerId])
 }
 
 // ─── DebtPayment ──────────────────────────────────────────────────────────────
@@ -378,9 +440,14 @@ model Payable {
   dueDate DateTime?
   notes   String?
 
+  ownerId String
+  owner   User   @relation("PayableOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
   payments  PayablePayment[]
   isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([ownerId])
 }
 
 // ─── PayablePayment ───────────────────────────────────────────────────────────
@@ -410,22 +477,33 @@ model Expense {
   description String?
   date        DateTime @default(now())
 
+  ownerId String
+  owner   User   @relation("ExpenseOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
   isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
   createdById String?
   createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
 }
 
 // ─── ExpenseCategory ──────────────────────────────────────────────────────────
 
 model ExpenseCategory {
   id    String @id @default(cuid())
-  name  String @unique
+  name  String
   icon  String?
   color String?
 
+  ownerId String
+  owner   User   @relation("ExpenseCategoryOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
   isDeleted Boolean   @default(false)
   expenses  Expense[]
+
+  @@unique([ownerId, name])
+  @@index([ownerId])
 }
 
 // ─── Counter ──────────────────────────────────────────────────────────────────

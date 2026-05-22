@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 
 export async function GET() {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const categories = await prisma.expenseCategory.findMany({
-      where: { isDeleted: false },
+      where: { ownerId: ctx.dbUser.id, isDeleted: false },
       orderBy: { name: "asc" },
     });
     return ok(categories);
@@ -16,6 +20,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
   try {
     const { name, icon, color } = await req.json();
     const normalized = name?.trim();
@@ -23,6 +30,7 @@ export async function POST(req: NextRequest) {
 
     const existing = await prisma.expenseCategory.findFirst({
       where: {
+        ownerId: ctx.dbUser.id,
         name: { equals: normalized, mode: "insensitive" },
         isDeleted: false,
       },
@@ -39,7 +47,12 @@ export async function POST(req: NextRequest) {
     }
 
     const cat = await prisma.expenseCategory.create({
-      data: { name: normalized, icon: icon || null, color: color || null },
+      data: {
+        ownerId: ctx.dbUser.id,
+        name: normalized,
+        icon: icon || null,
+        color: color || null,
+      },
     });
     return ok(cat, { status: 201 });
   } catch (e) {

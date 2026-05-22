@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+  const ownerId = ctx.dbUser.id;
+
   try {
     const { searchParams } = req.nextUrl;
     const type = searchParams.get("type") ?? "pl";
@@ -17,17 +22,17 @@ export async function GET(req: NextRequest) {
     if (type === "pl") {
       const [revenue, expenses, debtPayments] = await Promise.all([
         prisma.invoice.aggregate({
-          where: { isDeleted: false, status: { in: ["PAID", "PARTIAL", "ISSUED"] }, createdAt: dateFilter },
+          where: { ownerId, isDeleted: false, status: { in: ["PAID", "PARTIAL", "ISSUED"] }, createdAt: dateFilter },
           _sum: { total: true, paidAmount: true, remainingAmount: true },
           _count: true,
         }),
         prisma.expense.aggregate({
-          where: { isDeleted: false, date: dateFilter },
+          where: { ownerId, isDeleted: false, date: dateFilter },
           _sum: { amount: true },
           _count: true,
         }),
         prisma.debtPayment.aggregate({
-          where: { paidAt: dateFilter },
+          where: { paidAt: dateFilter, debt: { ownerId } },
           _sum: { amount: true },
         }),
       ]);
@@ -57,7 +62,7 @@ export async function GET(req: NextRequest) {
 
     if (type === "sales") {
       const invoices = await prisma.invoice.findMany({
-        where: { isDeleted: false, status: { in: ["PAID", "PARTIAL", "ISSUED"] }, createdAt: dateFilter },
+        where: { ownerId, isDeleted: false, status: { in: ["PAID", "PARTIAL", "ISSUED"] }, createdAt: dateFilter },
         include: {
           customer: { select: { id: true, name: true } },
           _count: { select: { items: true } },
@@ -65,7 +70,6 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
       });
 
-      // Group by day
       const byDay: Record<string, { date: string; revenue: number; count: number }> = {};
       invoices.forEach((inv) => {
         const key = inv.createdAt.toISOString().split("T")[0];
@@ -74,7 +78,6 @@ export async function GET(req: NextRequest) {
         byDay[key].count += 1;
       });
 
-      // Top customers
       const customerMap: Record<string, { name: string; revenue: number; count: number }> = {};
       invoices.forEach((inv) => {
         const { id, name } = inv.customer;
@@ -105,11 +108,12 @@ export async function GET(req: NextRequest) {
           SELECT id, name, sku, "stockQty", "minStockQty", "sellPrice"
           FROM "Product"
           WHERE "isActive" = true AND "isDeleted" = false
+          AND "ownerId" = ${ownerId}
           AND "stockQty" <= "minStockQty"
           ORDER BY "stockQty" ASC
         `,
         prisma.product.aggregate({
-          where: { isActive: true, isDeleted: false },
+          where: { ownerId, isActive: true, isDeleted: false },
           _sum: { stockQty: true },
           _count: true,
         }),
@@ -119,6 +123,7 @@ export async function GET(req: NextRequest) {
         SELECT COALESCE(SUM("stockQty"::numeric * "costPrice"), 0) AS value
         FROM "Product"
         WHERE "isActive" = true AND "isDeleted" = false
+        AND "ownerId" = ${ownerId}
       `;
 
       return ok({
@@ -135,7 +140,7 @@ export async function GET(req: NextRequest) {
 
     if (type === "debts") {
       const debts = await prisma.debt.findMany({
-        where: { isDeleted: false, status: { not: "PAID" } },
+        where: { ownerId, isDeleted: false, status: { not: "PAID" } },
         include: {
           customer: { select: { id: true, name: true, phone: true } },
           payments: true,
