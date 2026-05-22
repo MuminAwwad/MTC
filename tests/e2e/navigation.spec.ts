@@ -41,6 +41,13 @@ test.describe("Public routes & redirects", () => {
     expect(res?.ok()).toBeTruthy();
   });
 
+});
+
+// proxy.ts redirects every unauthenticated non-API URL to /login, so the
+// not-found page only renders when a session exists.
+test.describe("404 page (authenticated)", () => {
+  test.use({ storageState: "tests/e2e/.auth/user.json" });
+
   test("404 page renders for unknown routes", async ({ page }) => {
     await page.goto("/this-route-does-not-exist-xyz");
     await expect(page.getByText("404")).toBeVisible();

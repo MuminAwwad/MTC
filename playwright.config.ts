@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  globalSetup: require.resolve("./tests/e2e/global-setup.ts"),
   // Turbopack's dev server compiles routes lazily; high parallelism causes
   // ERR_ABORTED on cold navigation. 2 workers keeps the queue manageable.
   fullyParallel: true,

@@ -1,10 +1,13 @@
 import { test, expect } from "@playwright/test";
 
-// These endpoints don't have auth guards in their handlers — they hit the DB
-// directly via `prisma` and expose read-only data. We verify response shape
-// and HTTP semantics without making any DB writes.
+// These read endpoints don't have auth guards in their handlers, but proxy.ts
+// blanket-401s any unauthenticated /api/* request, so we run this block with
+// the session captured by global-setup. We only verify response shape and
+// HTTP semantics — no DB writes.
 
 test.describe("Public read APIs", () => {
+  test.use({ storageState: "tests/e2e/.auth/user.json" });
+
   test("GET /api/customers returns JSON", async ({ request }) => {
     const res = await request.get("/api/customers");
     expect(res.status()).toBe(200);
