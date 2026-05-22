@@ -28,7 +28,7 @@ export default function ForgotPasswordPage() {
       });
 
       if (resetError) {
-        setError("حدث خطأ أثناء إرسال البريد. يرجى المحاولة مجددًا");
+        setError(resetError.message);
       } else {
         setSent(true);
       }
