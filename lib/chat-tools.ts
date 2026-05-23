@@ -264,7 +264,7 @@ const TOOLS: ToolDefinition[] = [
         // sometimes quote integers and Groq's strict validator rejects the
         // call. Server executors coerce via Number(...).
         limit: {
-          type: ["integer", "string"],
+          type: "string",
           description: "Max rows (default 10, max 25).",
         },
       },
@@ -393,11 +393,11 @@ const TOOLS: ToolDefinition[] = [
       type: "object",
       properties: {
         days: {
-          type: ["integer", "string"],
+          type: "string",
           description: "Lookback window in days. Default 30.",
         },
         limit: {
-          type: ["integer", "string"],
+          type: "string",
           description: "How many customers (1-20). Default 5.",
         },
       },

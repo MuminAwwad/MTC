@@ -75,6 +75,8 @@ async function commitPurchaseInvoice(
   const noteBase = data.invoiceDate ? `${reference} (${data.invoiceDate})` : reference;
 
   const result = await prisma.$transaction(async (tx) => {
+    // Inline because Prisma counts each await as a separate query: the per-row
+    // sequence is hot-path, so we need a long ceiling. 60 s covers ~500 rows.
     // 1. Supplier — find by phone within shop, else create.
     let supplierId: string | null = null;
     const phone = data.supplier.phone?.trim() || null;
@@ -165,7 +167,7 @@ async function commitPurchaseInvoice(
     });
 
     return { supplierId, payableId: payable.id, created, restocked, payableTotal };
-  });
+  }, { timeout: 60_000, maxWait: 10_000 });
 
   return {
     kind: "purchase_invoice" as const,
@@ -179,6 +181,8 @@ async function commitDebts(ownerId: string, data: DebtsData) {
   if (data.rows.length === 0) return { error: "لا توجد صفوف للاستيراد" };
 
   const result = await prisma.$transaction(async (tx) => {
+    // Inline because Prisma counts each await as a separate query: the per-row
+    // sequence is hot-path, so we need a long ceiling. 60 s covers ~500 rows.
     let customersCreated = 0;
     let debtsCreated = 0;
     let totalILS = 0;
@@ -233,7 +237,7 @@ async function commitDebts(ownerId: string, data: DebtsData) {
     }
 
     return { customersCreated, debtsCreated, totalILS };
-  });
+  }, { timeout: 60_000, maxWait: 10_000 });
 
   return {
     kind: "debts" as const,
@@ -247,6 +251,8 @@ async function commitCustomers(ownerId: string, data: CustomersData) {
   if (data.rows.length === 0) return { error: "لا توجد عملاء للاستيراد" };
 
   const result = await prisma.$transaction(async (tx) => {
+    // Inline because Prisma counts each await as a separate query: the per-row
+    // sequence is hot-path, so we need a long ceiling. 60 s covers ~500 rows.
     let created = 0;
     let skipped = 0;
 
@@ -276,7 +282,7 @@ async function commitCustomers(ownerId: string, data: CustomersData) {
     }
 
     return { created, skipped };
-  });
+  }, { timeout: 60_000, maxWait: 10_000 });
 
   return {
     kind: "customers" as const,
@@ -290,6 +296,8 @@ async function commitProducts(ownerId: string, userId: string, data: ProductsDat
   if (data.rows.length === 0) return { error: "لا توجد منتجات للاستيراد" };
 
   const result = await prisma.$transaction(async (tx) => {
+    // Inline because Prisma counts each await as a separate query: the per-row
+    // sequence is hot-path, so we need a long ceiling. 60 s covers ~500 rows.
     let created = 0;
     let updated = 0;
 
@@ -388,7 +396,7 @@ async function commitProducts(ownerId: string, userId: string, data: ProductsDat
     }
 
     return { created, updated };
-  });
+  }, { timeout: 60_000, maxWait: 10_000 });
 
   return {
     kind: "products" as const,
