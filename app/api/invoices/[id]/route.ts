@@ -165,6 +165,258 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
+type InvoiceItemInput = {
+  productId?: string | null;
+  name: string;
+  qty: number;
+  unitPrice: number;
+  discount?: number;
+  source?: "SALE" | "TICKET_PART" | "TICKET_LABOR";
+};
+
+type EditBody = {
+  items: InvoiceItemInput[];
+  customerId?: string;
+  discountAmount?: number;
+  discountPercent?: number;
+  taxPercent?: number;
+  notes?: string | null;
+  debt?: { dueDate?: string | null; notes?: string | null } | null;
+};
+
+/**
+ * Full edit of an invoice — items, discounts, tax, notes, debt details.
+ * Reverses every stock movement made for the old items, deletes them, then
+ * re-applies items + stock movements for the new set inside one transaction.
+ * Linked debt is recomputed: its amount becomes the new remaining; if that
+ * remaining drops to zero the debt is soft-deleted; if no debt existed and
+ * remaining > 0 a new one is created. Cannot drop newTotal below
+ * paidAmount — refund/cancel first.
+ */
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
+  try {
+    const { id } = await params;
+    const body = (await req.json()) as EditBody;
+    const {
+      items,
+      customerId: newCustomerId,
+      discountAmount = 0,
+      discountPercent = 0,
+      taxPercent = 0,
+      notes,
+      debt: debtDetails,
+    } = body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return ok({ error: "يجب إضافة منتج واحد على الأقل" }, { status: 400 });
+    }
+
+    const invoice = await prisma.invoice.findFirst({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      include: { items: true, debts: { where: { isDeleted: false } } },
+    });
+    if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
+    if (invoice.status === "CANCELLED") {
+      return ok({ error: "لا يمكن تعديل فاتورة ملغاة" }, { status: 400 });
+    }
+
+    // Customer can be swapped, except on ticket-linked invoices — the ticket
+    // belongs to the original customer and re-pointing the invoice would
+    // create a mismatch with the device owner.
+    const customerChanged = !!newCustomerId && newCustomerId !== invoice.customerId;
+    if (customerChanged) {
+      if (invoice.ticketId) {
+        return ok(
+          { error: "لا يمكن تغيير العميل على فاتورة مرتبطة بتذكرة صيانة" },
+          { status: 400 }
+        );
+      }
+      const target = await prisma.customer.findFirst({
+        where: { id: newCustomerId, ownerId: ctx.dbUser.id, isDeleted: false },
+        select: { id: true },
+      });
+      if (!target) return ok({ error: "العميل غير موجود" }, { status: 404 });
+    }
+
+    const subtotal = items.reduce(
+      (sum, item) => sum + item.qty * item.unitPrice - (item.discount ?? 0),
+      0
+    );
+    const discAmt = discountPercent > 0 ? subtotal * (discountPercent / 100) : discountAmount;
+    const taxableAmount = subtotal - discAmt;
+    const taxAmount = taxPercent > 0 ? taxableAmount * (taxPercent / 100) : 0;
+    const newTotal = taxableAmount + taxAmount;
+    const paid = Number(invoice.paidAmount);
+
+    if (newTotal < paid) {
+      return ok(
+        {
+          error: `الإجمالي الجديد (${newTotal.toFixed(2)}) أقل من المبلغ المدفوع (${paid.toFixed(2)}). ألغِ الفاتورة أو سجّل ردًا للدفعة أولًا.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const stockWasMoved = invoice.status !== "DRAFT";
+
+      // 1. Reverse old stock movements: return every productized line to stock.
+      if (stockWasMoved) {
+        for (const old of invoice.items) {
+          if (old.productId && old.qty > 0) {
+            await tx.product.update({
+              where: { id: old.productId },
+              data: { stockQty: { increment: old.qty } },
+            });
+            await tx.stockMovement.create({
+              data: {
+                ownerId: ctx.dbUser.id,
+                productId: old.productId,
+                createdById: ctx.dbUser.id,
+                type: "IN",
+                qty: old.qty,
+                note: `تعديل فاتورة ${invoice.invoiceNumber} — إرجاع`,
+                reference: invoice.invoiceNumber,
+              },
+            });
+          }
+        }
+      }
+
+      // 2. Replace items.
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
+      await tx.invoiceItem.createMany({
+        data: items.map((item) => ({
+          invoiceId: id,
+          productId: item.productId ?? null,
+          name: item.name,
+          qty: item.qty,
+          unitPrice: item.unitPrice,
+          discount: item.discount ?? 0,
+          total: item.qty * item.unitPrice - (item.discount ?? 0),
+          source: item.source ?? "SALE",
+        })),
+      });
+
+      // 3. Re-apply stock movements for the new items.
+      if (stockWasMoved) {
+        for (const item of items) {
+          if (item.productId && item.qty > 0) {
+            await decrementStockOrFail(tx, item.productId, item.qty);
+            await tx.stockMovement.create({
+              data: {
+                ownerId: ctx.dbUser.id,
+                productId: item.productId,
+                createdById: ctx.dbUser.id,
+                type: "OUT",
+                qty: item.qty,
+                note: `تعديل فاتورة ${invoice.invoiceNumber}`,
+                reference: invoice.invoiceNumber,
+              },
+            });
+          }
+        }
+      }
+
+      // 4. Recompute invoice status from the new total + the (unchanged) paid.
+      const newRemaining = newTotal - paid;
+      const newStatus: InvoiceStatus =
+        invoice.status === "DRAFT"
+          ? "DRAFT"
+          : newRemaining <= 0
+          ? "PAID"
+          : paid > 0
+          ? "PARTIAL"
+          : "ISSUED";
+
+      // 5. Sync the linked debt.
+      const existingDebt = invoice.debts[0] ?? null;
+      if (newRemaining > 0) {
+        if (existingDebt) {
+          await tx.debt.update({
+            where: { id: existingDebt.id },
+            data: {
+              amount: newRemaining,
+              status: paid > 0 ? "PARTIAL" : "PENDING",
+              dueDate:
+                debtDetails && "dueDate" in debtDetails
+                  ? debtDetails.dueDate
+                    ? new Date(debtDetails.dueDate)
+                    : null
+                  : existingDebt.dueDate,
+              notes:
+                debtDetails && "notes" in debtDetails
+                  ? debtDetails.notes ?? null
+                  : existingDebt.notes,
+            },
+          });
+        } else if (invoice.status !== "DRAFT") {
+          // Bill went up after editing — open a fresh debt row.
+          await tx.debt.create({
+            data: {
+              ownerId: ctx.dbUser.id,
+              customerId: invoice.customerId,
+              invoiceId: invoice.id,
+              amount: newRemaining,
+              currency: invoice.currency,
+              reason: `فاتورة ${invoice.invoiceNumber}`,
+              status: paid > 0 ? "PARTIAL" : "PENDING",
+              dueDate: debtDetails?.dueDate ? new Date(debtDetails.dueDate) : null,
+              notes: debtDetails?.notes ?? null,
+            },
+          });
+        }
+      } else if (existingDebt) {
+        // Total dropped to (or below) what was already paid — wipe the debt.
+        await tx.debt.update({
+          where: { id: existingDebt.id },
+          data: { isDeleted: true, status: "PAID" },
+        });
+      }
+
+      // Repoint the invoice + every linked debt at the new customer.
+      if (customerChanged && newCustomerId) {
+        await tx.debt.updateMany({
+          where: { invoiceId: id, isDeleted: false },
+          data: { customerId: newCustomerId },
+        });
+      }
+
+      return tx.invoice.update({
+        where: { id },
+        data: {
+          subtotal,
+          discountAmount: discAmt,
+          discountPercent,
+          taxPercent,
+          taxAmount,
+          total: newTotal,
+          remainingAmount: Math.max(0, newRemaining),
+          status: newStatus,
+          ...(notes !== undefined ? { notes } : {}),
+          ...(customerChanged && newCustomerId ? { customerId: newCustomerId } : {}),
+        },
+        include: {
+          customer: true,
+          items: { include: { product: { select: { id: true, name: true, sku: true } } } },
+          debts: { where: { isDeleted: false }, include: { payments: true } },
+        },
+      });
+    });
+
+    return ok(updated);
+  } catch (e) {
+    if (e instanceof InsufficientStockError) {
+      return ok({ error: e.message }, { status: 409 });
+    }
+    console.error(e);
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireUser();
   if (ctx instanceof NextResponse) return ctx;

@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { Printer, CreditCard, X, CheckCircle2, AlertCircle, MessageCircle } from "lucide-react";
+import { Printer, CreditCard, X, CheckCircle2, AlertCircle, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader, StatusBadge, SectionCard, LoadingSkeleton, ConfirmDialog, CurrencyDisplay, useToast } from "@/components/shared";
 import { INVOICE_STATUS_LABELS } from "@/lib/constants";
 import { formatDate, formatDateTime } from "@/lib/formatters";
-import { buildInvoiceWhatsAppUrl } from "@/lib/whatsapp";
+import { InvoiceShareButton } from "@/components/invoices/InvoiceShareButton";
 import type { InvoiceStatus, Currency } from "@prisma/client";
 
 interface InvoiceDetail {
@@ -115,6 +115,7 @@ export default function InvoiceDetailPage() {
   const canIssue = invoice.status === "DRAFT";
   const canPay = ["ISSUED", "PARTIAL"].includes(invoice.status);
   const canCancel = ["DRAFT", "ISSUED", "PARTIAL"].includes(invoice.status);
+  const canEdit = invoice.status !== "CANCELLED";
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -128,29 +129,27 @@ export default function InvoiceDetailPage() {
         ]}
         action={
           <div className="flex gap-2 flex-wrap">
+            {canEdit && (
+              <Link href={`/invoices/${id}/edit`}>
+                <Button variant="outline" className="gap-2">
+                  <Pencil className="h-4 w-4" />تعديل
+                </Button>
+              </Link>
+            )}
             <Link href={`/print/invoices/${id}`} target="_blank">
               <Button variant="outline" className="gap-2">
                 <Printer className="h-4 w-4" />طباعة
               </Button>
             </Link>
-            <a
-              href={buildInvoiceWhatsAppUrl({
-                invoiceId: invoice.id,
-                invoiceNumber: invoice.invoiceNumber,
-                customerName: invoice.customer.name,
-                customerPhone: invoice.customer.phone,
-                currency: invoice.currency,
-                total: Number(invoice.total),
-                remaining: Number(invoice.remainingAmount),
-                origin: typeof window !== "undefined" ? window.location.origin : "",
-              })}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button variant="outline" className="gap-2 text-[#25d366] border-[#25d366]/40 hover:bg-[#25d366]/10 hover:text-[#1da851]">
-                <MessageCircle className="h-4 w-4" />واتساب
-              </Button>
-            </a>
+            <InvoiceShareButton
+              invoiceId={invoice.id}
+              invoiceNumber={invoice.invoiceNumber}
+              customerName={invoice.customer.name}
+              customerPhone={invoice.customer.phone}
+              currency={invoice.currency}
+              total={Number(invoice.total)}
+              remaining={Number(invoice.remainingAmount)}
+            />
             {canIssue && (
               <Button onClick={() => changeStatus("ISSUED")} disabled={actionLoading}>
                 {actionLoading ? "..." : "إصدار الفاتورة"}

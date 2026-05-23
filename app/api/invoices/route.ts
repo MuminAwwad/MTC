@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { generateInvoiceNumber } from "@/lib/invoice-number";
-import { InvoiceStatus } from "@prisma/client";
+import { Currency, InvoiceStatus } from "@prisma/client";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
 import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
 import { requireUser } from "@/lib/auth";
@@ -91,6 +91,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+
+    type InvoiceItemInput = {
+      productId?: string;
+      name: string;
+      qty: number;
+      unitPrice: number;
+      discount?: number;
+      source?: "SALE" | "TICKET_PART" | "TICKET_LABOR";
+    };
+
     const {
       customerId,
       items,
@@ -105,10 +115,18 @@ export async function POST(req: NextRequest) {
       ticketId,
       debt: debtDetails,
     } = body as {
+      customerId?: string;
+      items?: InvoiceItemInput[];
+      discountAmount?: number;
+      discountPercent?: number;
+      taxPercent?: number;
+      currency?: Currency;
+      exchangeRate?: number;
+      notes?: string | null;
+      status?: "DRAFT" | "ISSUED" | "PAID" | "PARTIAL" | string;
       paidAmount?: number;
       ticketId?: string;
       debt?: { dueDate?: string; notes?: string };
-      [k: string]: unknown;
     };
 
     if (!customerId) return ok({ error: "العميل مطلوب" }, { status: 400 });
@@ -139,7 +157,7 @@ export async function POST(req: NextRequest) {
     });
     if (!customer) return ok({ error: "العميل غير موجود" }, { status: 404 });
 
-    const subtotal = items.reduce((sum: number, item: { qty: number; unitPrice: number; discount: number }) => {
+    const subtotal = items.reduce((sum: number, item) => {
       const lineTotal = item.qty * item.unitPrice - (item.discount ?? 0);
       return sum + lineTotal;
     }, 0);
