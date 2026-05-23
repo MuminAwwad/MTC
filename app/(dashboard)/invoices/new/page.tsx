@@ -65,9 +65,10 @@ function NewInvoiceForm() {
   const [loading, setLoading] = useState<"draft" | "issue" | null>(null);
   const [error, setError] = useState("");
   const [attachedTicket, setAttachedTicket] = useState<{ id: string; ticketNumber: string } | null>(null);
-  // Tickets owned by the chosen customer that are ready/billable but not yet linked to any invoice
+  // Tickets owned by the chosen customer that are not yet linked to any invoice.
+  // The ticket picker dropdown reads from this list; once a ticket is attached
+  // it stays in the list (selected) so it shows in the dropdown.
   const [unbilledTickets, setUnbilledTickets] = useState<UnbilledTicket[]>([]);
-  const [dismissedTicketIds, setDismissedTicketIds] = useState<Set<string>>(new Set());
 
   const attachTicket = useCallback(async (tid: string) => {
     const res = await fetch(`/api/tickets/${tid}`);
@@ -111,7 +112,6 @@ function NewInvoiceForm() {
       setPartialPaid((cur) => cur + deposit);
     }
     setAttachedTicket({ id: t.id, ticketNumber: t.ticketNumber });
-    setUnbilledTickets((prev) => prev.filter((u) => u.id !== t.id));
   }, []);
 
   // Auto-attach when arriving with ?ticketId=...
@@ -120,29 +120,29 @@ function NewInvoiceForm() {
     attachTicket(ticketId);
   }, [ticketId, attachTicket]);
 
-  // When the customer changes, look for unbilled tickets and offer to attach them
+  // Fetch the customer's unbilled (no invoice linked) non-cancelled tickets.
+  // Refreshed whenever the customer changes — even if a ticket is currently
+  // attached, the list stays in sync.
   useEffect(() => {
     if (!customerId) { setUnbilledTickets([]); return; }
-    if (attachedTicket) return;
     let cancelled = false;
     (async () => {
       const res = await fetch(`/api/tickets?customerId=${customerId}&unbilled=true&all=true`);
       if (!res.ok || cancelled) return;
       const data = await res.json();
       const list: UnbilledTicket[] = (data.tickets ?? [])
-        .filter((t: { status: string; finalCost?: number | null }) => t.status !== "CANCELLED")
-        .map((t: { id: string; ticketNumber: string; status: string; finalCost?: number | null; deviceType?: string; deviceBrand?: string | null; deviceModel?: string | null }) => ({
+        .filter((t: { status: string }) => t.status !== "CANCELLED")
+        .map((t: { id: string; ticketNumber: string; status: string; finalCost?: number | null; deviceBrand?: string | null; deviceModel?: string | null }) => ({
           id: t.id,
           ticketNumber: t.ticketNumber,
           status: t.status,
           finalCost: t.finalCost ?? null,
           deviceLabel: [t.deviceBrand, t.deviceModel].filter(Boolean).join(" "),
-        }))
-        .filter((t: UnbilledTicket) => !dismissedTicketIds.has(t.id));
+        }));
       setUnbilledTickets(list);
     })();
     return () => { cancelled = true; };
-  }, [customerId, attachedTicket, dismissedTicketIds]);
+  }, [customerId]);
 
   const updateItem = useCallback((id: string, field: keyof LineItem, value: string | number) => {
     setItems((prev) =>
@@ -170,9 +170,8 @@ function NewInvoiceForm() {
 
   const detachTicket = useCallback(() => {
     setItems((prev) => prev.filter((i) => i.source === "SALE"));
-    if (attachedTicket) setDismissedTicketIds((s) => new Set(s).add(attachedTicket.id));
     setAttachedTicket(null);
-  }, [attachedTicket]);
+  }, []);
 
   const saleItems = items.filter((i) => i.source === "SALE");
   const ticketItems = items.filter((i) => i.source !== "SALE");
@@ -249,46 +248,7 @@ function NewInvoiceForm() {
         ]}
       />
 
-      {!attachedTicket && unbilledTickets.length > 0 && (
-        <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm text-orange-800">
-          <p className="font-semibold mb-1.5 flex items-center gap-2">
-            <Wrench className="h-4 w-4" />
-            هذا العميل لديه {unbilledTickets.length === 1 ? "تذكرة صيانة" : `${unbilledTickets.length} تذاكر`} غير مفوترة
-          </p>
-          <ul className="space-y-1.5">
-            {unbilledTickets.map((t) => (
-              <li key={t.id} className="flex items-center justify-between gap-2 bg-white/60 rounded-md px-2 py-1.5">
-                <span className="ltr font-medium text-[#0b2345]">
-                  {t.ticketNumber}
-                  {t.deviceLabel && <span className="text-xs text-[#64748b] mr-2 rtl">({t.deviceLabel})</span>}
-                </span>
-                <div className="flex gap-1.5">
-                  <Button size="sm" variant="outline" onClick={() => setDismissedTicketIds((s) => new Set(s).add(t.id))}>
-                    تجاهل
-                  </Button>
-                  <Button size="sm" onClick={() => attachTicket(t.id)}>
-                    ضمّ للفاتورة
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {attachedTicket && (
-        <div className="flex items-center justify-between gap-2 text-sm bg-orange-50 border border-orange-200 text-orange-800 rounded-lg px-3 py-2">
-          <span className="flex items-center gap-2">
-            <Wrench className="h-4 w-4 flex-shrink-0" />
-            تم ضمّ تذكرة <span className="ltr font-semibold">{attachedTicket.ticketNumber}</span>. إصدار الفاتورة سيُسلِّم التذكرة تلقائيًا.
-          </span>
-          <button onClick={detachTicket} className="text-orange-700 hover:text-orange-900 text-xs underline">
-            إزالة
-          </button>
-        </div>
-      )}
-
-      {/* Customer + Currency */}
+      {/* Customer + Currency + Repair-ticket picker */}
       <SectionCard title="بيانات الفاتورة">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField label="العميل" required>
@@ -307,6 +267,48 @@ function NewInvoiceForm() {
             </select>
           </FormField>
         </div>
+
+        {customerId && (
+          <div className="mt-4">
+            <FormField label="تذكرة صيانة (اختياري)" htmlFor="ticket-pick">
+              <select
+                id="ticket-pick"
+                value={attachedTicket?.id ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) {
+                    if (attachedTicket) detachTicket();
+                  } else if (val !== attachedTicket?.id) {
+                    if (attachedTicket) detachTicket();
+                    attachTicket(val);
+                  }
+                }}
+                disabled={unbilledTickets.length === 0 && !attachedTicket}
+                className="w-full h-10 px-3 rounded-lg border border-[#e2e8f0] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#104e98] disabled:bg-[#f8fafc] disabled:text-[#94a3b8]"
+              >
+                <option value="">
+                  {unbilledTickets.length === 0
+                    ? "لا توجد تذاكر صيانة غير مفوترة لهذا العميل"
+                    : "بدون — فاتورة بيع فقط"}
+                </option>
+                {unbilledTickets.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.ticketNumber}
+                    {t.deviceLabel ? ` — ${t.deviceLabel}` : ""}
+                    {t.finalCost != null ? ` — ₪${Number(t.finalCost).toFixed(2)}` : ""}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            {attachedTicket && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-orange-700">
+                <Wrench className="h-3.5 w-3.5" />
+                إصدار الفاتورة سيُسلِّم التذكرة{" "}
+                <span className="ltr font-semibold">{attachedTicket.ticketNumber}</span> تلقائيًا.
+              </p>
+            )}
+          </div>
+        )}
       </SectionCard>
 
       {/* Sale items */}
