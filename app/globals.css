@@ -155,6 +155,18 @@ select {
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
 }
 
+/* iOS Safari auto-zooms on form controls whose computed font-size is under
+ * 16 px the moment they receive focus. Enforce 16 px on touch viewports so
+ * focus doesn't trigger that zoom, and let the design's 14 px take over
+ * once we're on a non-touch screen (sm: breakpoint, 640 px). */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* Print */
 @media print {
   .no-print {
