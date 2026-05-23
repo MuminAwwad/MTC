@@ -556,16 +556,7 @@ export default function EditInvoicePage() {
         <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
       )}
 
-      <div
-        className="
-          sticky bottom-0 -mx-4 sm:mx-0 px-4 sm:px-0 py-3 sm:py-0
-          bg-white/95 sm:bg-transparent backdrop-blur sm:backdrop-blur-0
-          border-t border-[#e2e8f0] sm:border-0
-          pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:pb-8
-          flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3
-          z-10
-        "
-      >
+      <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pb-8">
         <Button variant="outline" onClick={() => router.back()} disabled={saving}>
           إلغاء
         </Button>
