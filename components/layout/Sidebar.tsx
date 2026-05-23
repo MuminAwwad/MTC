@@ -16,6 +16,7 @@ import {
   Receipt,
   BarChart3,
   Settings,
+  Sparkles,
   ChevronRight,
   ChevronLeft,
   X,
@@ -67,6 +68,11 @@ const NAV_ITEMS = [
     href: "/reports",
     label: "التقارير",
     icon: BarChart3,
+  },
+  {
+    href: "/chat",
+    label: "المساعد الذكي",
+    icon: Sparkles,
   },
   {
     href: "/settings",
