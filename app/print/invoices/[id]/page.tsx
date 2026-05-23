@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { SHOP_INFO, INVOICE_STATUS_LABELS } from "@/lib/constants";
@@ -7,12 +6,19 @@ import { formatDate, formatDateTime } from "@/lib/formatters";
 import { buildInvoiceWhatsAppUrl } from "@/lib/whatsapp";
 import PrintButton from "./PrintButton";
 
-export default async function PrintInvoicePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PrintInvoicePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ pdf?: string }>;
+}) {
   const { id } = await params;
-  const hdrs = await headers();
-  const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "";
-  const proto = hdrs.get("x-forwarded-proto") ?? "https";
-  const origin = host ? `${proto}://${host}` : "";
+  // `?pdf=1` is set by InvoiceShareButton when it screenshots this page for
+  // the WhatsApp PDF — we hide the action bar entirely so the customer's
+  // PDF doesn't contain our own print/whatsapp/back buttons.
+  const { pdf } = await searchParams;
+  const isPdfCapture = pdf === "1";
 
   const supabase = await createClient();
   const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -49,20 +55,20 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
         body { font-family: var(--font-arabic, 'IBM Plex Sans Arabic', sans-serif); }
       `}</style>
 
-      {/* Print/share buttons — hidden in print */}
+      {/* Print/share buttons — hidden in print, and omitted entirely when
+          the page is being captured for the WhatsApp PDF. */}
+      {!isPdfCapture && (
       <div className="no-print fixed top-4 left-4 flex gap-2 z-10">
         <PrintButton />
         {isStaff && (
           <a
             href={buildInvoiceWhatsAppUrl({
-              invoiceId: invoice.id,
               invoiceNumber: invoice.invoiceNumber,
               customerName: invoice.customer.name,
               customerPhone: invoice.customer.phone,
               currency: invoice.currency,
               total: Number(invoice.total),
               remaining: Number(invoice.remainingAmount),
-              origin,
             })}
             target="_blank"
             rel="noopener noreferrer"
@@ -77,6 +83,7 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
           </a>
         )}
       </div>
+      )}
 
       {/* A4 page */}
       <div className="max-w-[210mm] mx-auto p-8 min-h-screen">

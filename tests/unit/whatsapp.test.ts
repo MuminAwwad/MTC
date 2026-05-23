@@ -1,15 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { buildInvoiceWhatsAppUrl } from "@/lib/whatsapp";
+import { buildInvoiceWhatsAppUrl, buildInvoiceWhatsAppMessage } from "@/lib/whatsapp";
 
 const baseInput = {
-  invoiceId: "inv_123",
   invoiceNumber: "MTC-2026-0001",
   customerName: "أحمد",
   customerPhone: "0599880618",
   currency: "ILS" as const,
   total: 150,
   remaining: 50,
-  origin: "https://shop.test",
 };
 
 describe("buildInvoiceWhatsAppUrl", () => {
@@ -61,13 +59,6 @@ describe("buildInvoiceWhatsAppUrl", () => {
     expect(text).toContain("JD150.00");
   });
 
-  it("strips trailing slash from origin when building link", () => {
-    const url = buildInvoiceWhatsAppUrl({ ...baseInput, origin: "https://shop.test/" });
-    const text = decodeURIComponent(url.split("?text=")[1]);
-    expect(text).toContain("https://shop.test/print/invoices/inv_123");
-    expect(text).not.toContain("shop.test//print");
-  });
-
   it("coerces string totals to numbers", () => {
     const text = decodeURIComponent(
       buildInvoiceWhatsAppUrl({ ...baseInput, total: "200.5", remaining: "10" }).split(
@@ -92,5 +83,18 @@ describe("buildInvoiceWhatsAppUrl", () => {
       buildInvoiceWhatsAppUrl(baseInput).split("?text=")[1]
     );
     expect(text).toContain("مرحبًا أحمد");
+  });
+});
+
+describe("buildInvoiceWhatsAppMessage", () => {
+  it("does not embed any URL — the PDF travels via the share sheet now", () => {
+    const msg = buildInvoiceWhatsAppMessage(baseInput);
+    expect(msg).not.toMatch(/https?:\/\//);
+  });
+
+  it("mentions the attached invoice", () => {
+    const msg = buildInvoiceWhatsAppMessage(baseInput);
+    expect(msg).toContain("مرفق");
+    expect(msg).toContain("MTC-2026-0001");
   });
 });
