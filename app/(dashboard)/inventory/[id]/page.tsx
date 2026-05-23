@@ -107,7 +107,16 @@ export default function ProductDetailPage() {
             ]}
           />
         </div>
-        <ProductForm initialData={product} isEdit />
+        <ProductForm
+          initialData={product}
+          isEdit
+          onSuccess={(saved) => {
+            // Merge the freshly-saved row into the detail page's product
+            // state so the view returns to read-mode showing the new values.
+            setProduct((prev) => (prev ? { ...prev, ...saved } : prev));
+            setEditMode(false);
+          }}
+        />
       </div>
     );
   }

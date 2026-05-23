@@ -27,9 +27,13 @@ import type { Category, Supplier, Product } from "@prisma/client";
 interface ProductFormProps {
   initialData?: Partial<Product>;
   isEdit?: boolean;
+  /** Called with the updated product after a successful save.
+   *  The detail page uses this to swap its local state + exit edit mode,
+   *  since router.refresh() doesn't reload its client-side product state. */
+  onSuccess?: (saved: Product) => void;
 }
 
-export function ProductForm({ initialData, isEdit }: ProductFormProps) {
+export function ProductForm({ initialData, isEdit, onSuccess }: ProductFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -136,8 +140,12 @@ export function ProductForm({ initialData, isEdit }: ProductFormProps) {
         return;
       }
 
-      router.push(`/inventory/${data.id}`);
-      router.refresh();
+      if (isEdit && onSuccess) {
+        onSuccess(data as Product);
+      } else {
+        router.push(`/inventory/${data.id}`);
+        router.refresh();
+      }
     } catch {
       setError("حدث خطأ في الاتصال");
     } finally {
