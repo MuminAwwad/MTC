@@ -22,6 +22,7 @@ interface InvoiceDetail {
   discountPercent: number;
   taxPercent: number;
   taxAmount: number;
+  deliveryFee: number;
   total: number;
   paidAmount: number;
   remainingAmount: number;
@@ -237,6 +238,12 @@ export default function InvoiceDetailPage() {
               <div className="flex justify-between">
                 <dt className="text-[#64748b]">الضريبة ({Number(invoice.taxPercent)}%)</dt>
                 <dd className="ltr">₪{Number(invoice.taxAmount).toFixed(2)}</dd>
+              </div>
+            )}
+            {Number(invoice.deliveryFee) > 0 && (
+              <div className="flex justify-between">
+                <dt className="text-[#64748b]">رسوم التوصيل</dt>
+                <dd className="ltr">₪{Number(invoice.deliveryFee).toFixed(2)}</dd>
               </div>
             )}
             <div className="flex justify-between pt-2 border-t border-[#e2e8f0] font-bold text-[#0b2345] text-base">

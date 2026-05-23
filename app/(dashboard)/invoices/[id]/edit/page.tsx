@@ -39,6 +39,7 @@ interface LoadedInvoice {
   discountAmount: number;
   discountPercent: number;
   taxPercent: number;
+  deliveryFee: number;
   notes: string | null;
   paidAmount: number;
   ticketId: string | null;
@@ -78,6 +79,7 @@ export default function EditInvoicePage() {
   const [discountPercent, setDiscountPercent] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [taxPercent, setTaxPercent] = useState(0);
+  const [deliveryFee, setDeliveryFee] = useState(0);
   const [notes, setNotes] = useState("");
   const [debtDueDate, setDebtDueDate] = useState("");
   const [debtNotes, setDebtNotes] = useState("");
@@ -110,6 +112,7 @@ export default function EditInvoicePage() {
       setDiscountPercent(Number(data.discountPercent));
       setDiscountAmount(Number(data.discountAmount));
       setTaxPercent(Number(data.taxPercent));
+      setDeliveryFee(Number(data.deliveryFee ?? 0));
       setNotes(data.notes ?? "");
       const debt = data.debts[0];
       if (debt) {
@@ -169,7 +172,7 @@ export default function EditInvoicePage() {
   const discAmt = discountPercent > 0 ? subtotal * (discountPercent / 100) : discountAmount;
   const taxable = subtotal - discAmt;
   const taxAmt = taxPercent > 0 ? taxable * (taxPercent / 100) : 0;
-  const total = taxable + taxAmt;
+  const total = taxable + taxAmt + deliveryFee;
   const paid = loaded ? Number(loaded.paidAmount) : 0;
   const remaining = Math.max(0, total - paid);
   const willOweCustomer = remaining > 0 && loaded?.status !== "DRAFT";
@@ -215,6 +218,7 @@ export default function EditInvoicePage() {
           discountAmount,
           discountPercent,
           taxPercent,
+          deliveryFee,
           notes,
           ...(willOweCustomer
             ? {
@@ -426,6 +430,39 @@ export default function EditInvoicePage() {
                 dir="ltr"
               />
             </FormField>
+            <FormField label="رسوم التوصيل (₪)">
+              <div className="space-y-2">
+                <div className="flex gap-1 bg-[#f1f5f9] rounded-lg p-1">
+                  {[
+                    { label: "الضفة", value: 25 },
+                    { label: "القدس", value: 35 },
+                    { label: "الداخل", value: 80 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setDeliveryFee(preset.value)}
+                      className={`flex-1 px-2 py-1.5 text-xs rounded-md font-medium transition-all ${
+                        deliveryFee === preset.value
+                          ? "bg-white text-[#104e98] shadow-sm"
+                          : "text-[#64748b] hover:text-[#1e293b]"
+                      }`}
+                    >
+                      {preset.label} <span className="ltr text-[#94a3b8]">₪{preset.value}</span>
+                    </button>
+                  ))}
+                </div>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={deliveryFee}
+                  onChange={(e) => setDeliveryFee(Math.max(0, parseFloat(e.target.value) || 0))}
+                  placeholder="0 (لا توصيل) أو مبلغ مخصص"
+                  dir="ltr"
+                />
+              </div>
+            </FormField>
           </div>
 
           {willOweCustomer && (
@@ -469,6 +506,12 @@ export default function EditInvoicePage() {
               <div className="flex justify-between">
                 <dt className="text-[#64748b]">الضريبة ({taxPercent}%)</dt>
                 <dd className="ltr">₪{taxAmt.toFixed(2)}</dd>
+              </div>
+            )}
+            {deliveryFee > 0 && (
+              <div className="flex justify-between">
+                <dt className="text-[#64748b]">رسوم التوصيل</dt>
+                <dd className="ltr">₪{deliveryFee.toFixed(2)}</dd>
               </div>
             )}
             <div className="flex justify-between pt-2 border-t border-[#e2e8f0] text-base font-bold text-[#0b2345]">

@@ -180,6 +180,7 @@ type EditBody = {
   discountAmount?: number;
   discountPercent?: number;
   taxPercent?: number;
+  deliveryFee?: number;
   notes?: string | null;
   debt?: { dueDate?: string | null; notes?: string | null } | null;
 };
@@ -206,6 +207,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       discountAmount = 0,
       discountPercent = 0,
       taxPercent = 0,
+      deliveryFee = 0,
       notes,
       debt: debtDetails,
     } = body;
@@ -248,7 +250,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const discAmt = discountPercent > 0 ? subtotal * (discountPercent / 100) : discountAmount;
     const taxableAmount = subtotal - discAmt;
     const taxAmount = taxPercent > 0 ? taxableAmount * (taxPercent / 100) : 0;
-    const newTotal = taxableAmount + taxAmount;
+    const delivery = Math.max(0, Number(deliveryFee) || 0);
+    const newTotal = taxableAmount + taxAmount + delivery;
     const paid = Number(invoice.paidAmount);
 
     if (newTotal < paid) {
@@ -393,6 +396,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           discountPercent,
           taxPercent,
           taxAmount,
+          deliveryFee: delivery,
           total: newTotal,
           remainingAmount: Math.max(0, newRemaining),
           status: newStatus,

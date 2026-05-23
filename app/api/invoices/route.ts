@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
       discountAmount = 0,
       discountPercent = 0,
       taxPercent = 0,
+      deliveryFee = 0,
       currency = "ILS",
       exchangeRate = 1,
       notes,
@@ -120,6 +121,7 @@ export async function POST(req: NextRequest) {
       discountAmount?: number;
       discountPercent?: number;
       taxPercent?: number;
+      deliveryFee?: number;
       currency?: Currency;
       exchangeRate?: number;
       notes?: string | null;
@@ -165,7 +167,10 @@ export async function POST(req: NextRequest) {
     const discAmt = discountPercent > 0 ? subtotal * (discountPercent / 100) : discountAmount;
     const taxableAmount = subtotal - discAmt;
     const taxAmount = taxPercent > 0 ? taxableAmount * (taxPercent / 100) : 0;
-    const total = taxableAmount + taxAmount;
+    // Delivery fee is a flat add-on the cashier types in — added after tax,
+    // not part of the taxable base.
+    const delivery = Math.max(0, Number(deliveryFee) || 0);
+    const total = taxableAmount + taxAmount + delivery;
     const paid = Math.min(paidAmount, total);
     const remaining = total - paid;
 
@@ -193,6 +198,7 @@ export async function POST(req: NextRequest) {
           discountPercent,
           taxPercent,
           taxAmount,
+          deliveryFee: delivery,
           total,
           paidAmount: paid,
           remainingAmount: remaining,

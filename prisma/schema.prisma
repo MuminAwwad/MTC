@@ -252,6 +252,7 @@ model Invoice {
   discountPercent Decimal @db.Decimal(5, 2)  @default(0)
   taxPercent      Decimal @db.Decimal(5, 2)  @default(0)
   taxAmount       Decimal @db.Decimal(10, 2) @default(0)
+  deliveryFee     Decimal @db.Decimal(10, 2) @default(0)
   total           Decimal @db.Decimal(10, 2)
   paidAmount      Decimal @db.Decimal(10, 2) @default(0)
   remainingAmount Decimal @db.Decimal(10, 2) @default(0)

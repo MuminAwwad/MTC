@@ -243,6 +243,12 @@ export default async function PrintInvoicePage({
                 <dd className="ltr">{currencySymbol}{Number(invoice.taxAmount).toFixed(2)}</dd>
               </div>
             )}
+            {Number(invoice.deliveryFee) > 0 && (
+              <div className="flex justify-between">
+                <dt className="text-[#64748b]">رسوم التوصيل</dt>
+                <dd className="ltr">{currencySymbol}{Number(invoice.deliveryFee).toFixed(2)}</dd>
+              </div>
+            )}
             <div className="flex justify-between pt-2 border-t-2 border-[#104e98] font-bold text-[#0b2345] text-base">
               <dt>الإجمالي</dt>
               <dd className="ltr">{currencySymbol}{Number(invoice.total).toFixed(2)}</dd>
