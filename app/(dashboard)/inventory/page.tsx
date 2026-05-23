@@ -206,7 +206,61 @@ export default function InventoryPage() {
         </div>
       ) : (
         <SectionCard noPadding>
-          <div className="overflow-x-auto">
+          {/* Mobile: stacked cards */}
+          <ul className="md:hidden divide-y divide-[#f1f5f9]">
+            {products.map((p) => {
+              const isLow = p.stockQty <= p.minStockQty;
+              return (
+                <li key={p.id} className="p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <Link href={`/inventory/${p.id}`} className="min-w-0">
+                      <p className="font-medium text-[#1e293b] break-words">{p.name}</p>
+                      <p className="text-xs text-[#94a3b8] mt-0.5">
+                        {p.sku && <span className="ltr">{p.sku}</span>}
+                        {p.sku && p.category?.name && " · "}
+                        {p.category?.name}
+                      </p>
+                    </Link>
+                    <StatusBadge
+                      status={{
+                        type: "custom",
+                        label: p.isActive ? "نشط" : "غير نشط",
+                        color: p.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600",
+                      }}
+                    />
+                  </div>
+                  <dl className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <dt className="text-[#64748b]">المخزون</dt>
+                      <dd className={`mt-0.5 font-semibold flex items-center gap-1 ${isLow ? "text-red-600" : "text-[#1e293b]"}`}>
+                        {p.stockQty}
+                        {isLow && <AlertTriangle className="h-3 w-3" />}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[#64748b]">التكلفة</dt>
+                      <dd className="mt-0.5 ltr text-[#1e293b]">₪{Number(p.costPrice).toFixed(2)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[#64748b]">البيع</dt>
+                      <dd className="mt-0.5 ltr text-[#1e293b]">₪{Number(p.sellPrice).toFixed(2)}</dd>
+                    </div>
+                  </dl>
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => setAdjustProduct(p)}>
+                      تعديل المخزون
+                    </Button>
+                    <Button size="sm" variant="outline" className="flex-1" asChild>
+                      <Link href={`/inventory/${p.id}`}>عرض</Link>
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Desktop: table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#e2e8f0]">

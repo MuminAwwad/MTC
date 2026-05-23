@@ -18,10 +18,15 @@ const buttonVariants = cva(
         warning: "bg-[#f59e0b] text-white hover:bg-[#d97706] shadow-sm",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-8 px-3 text-xs rounded-md",
-        lg: "h-11 px-6",
-        icon: "h-10 w-10",
+        // Bigger on mobile (< 640px) so primary buttons hit a 44px tap target,
+        // back to the tighter desktop sizes from sm: upward.
+        default: "h-11 sm:h-10 px-4 py-2",
+        sm: "h-10 sm:h-8 px-3 text-xs rounded-md",
+        lg: "h-12 sm:h-11 px-6",
+        icon: "h-11 w-11 sm:h-10 sm:w-10",
+        // icon-sm stays compact — used inside tight inline contexts where
+        // 44px would break the layout. Touch-sensitive callers should pick
+        // the regular icon size.
         "icon-sm": "h-8 w-8 rounded-md",
       },
     },

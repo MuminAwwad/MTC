@@ -41,7 +41,9 @@ export function Pagination({
       <div className="flex items-center gap-1">
         <Button
           variant="outline"
-          size="icon-sm"
+          // icon-sm on desktop, bumped to icon on mobile for thumb-friendly targets
+          size="icon"
+          className="h-10 w-10 sm:h-8 sm:w-8 sm:rounded-md"
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
         >
@@ -51,16 +53,21 @@ export function Pagination({
           <Button
             key={p}
             variant={p === page ? "default" : "outline"}
-            size="icon-sm"
+            size="icon"
             onClick={() => onPageChange(p)}
-            className={cn(p === page && "pointer-events-none")}
+            className={cn(
+              "h-10 w-10 sm:h-8 sm:w-8 sm:rounded-md",
+              p === page && "pointer-events-none"
+            )}
           >
             {p}
           </Button>
         ))}
         <Button
           variant="outline"
-          size="icon-sm"
+          // icon-sm on desktop, bumped to icon on mobile for thumb-friendly targets
+          size="icon"
+          className="h-10 w-10 sm:h-8 sm:w-8 sm:rounded-md"
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
         >
