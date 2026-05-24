@@ -20,6 +20,7 @@ import {
   Pagination,
   ConfirmDialog,
   SectionCard,
+  ExportMenu,
 } from "@/components/shared";
 import { StockAdjustmentDialog } from "@/components/inventory/StockAdjustmentDialog";
 import type { Product, Category, Supplier } from "@prisma/client";
@@ -111,6 +112,11 @@ export default function InventoryPage() {
         breadcrumb={[{ label: "الرئيسية", href: "/dashboard" }, { label: "المخزون" }]}
         action={
           <div className="flex gap-2 flex-wrap">
+            <ExportMenu
+              type="products"
+              params={{ search, categoryId: categoryFilter }}
+              size="sm"
+            />
             <Button variant="outline" asChild size="sm">
               <Link href="/inventory/movements">سجل الحركات</Link>
             </Button>

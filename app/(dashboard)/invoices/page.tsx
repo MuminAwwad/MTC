@@ -14,6 +14,7 @@ import {
   CardSkeleton,
   CurrencyDisplay,
   StatCard,
+  ExportMenu,
 } from "@/components/shared";
 import { INVOICE_STATUS_LABELS, ITEMS_PER_PAGE } from "@/lib/constants";
 import { formatDate } from "@/lib/formatters";
@@ -79,9 +80,12 @@ export default function InvoicesPage() {
         title="الفواتير"
         subtitle={`${total} فاتورة`}
         action={
-          <Link href="/invoices/new">
-            <Button className="gap-2"><Plus className="h-4 w-4" />فاتورة جديدة</Button>
-          </Link>
+          <div className="flex gap-2 flex-wrap">
+            <ExportMenu type="invoices" params={{ search, status }} />
+            <Link href="/invoices/new">
+              <Button className="gap-2"><Plus className="h-4 w-4" />فاتورة جديدة</Button>
+            </Link>
+          </div>
         }
         breadcrumb={[{ label: "الرئيسية", href: "/dashboard" }, { label: "الفواتير" }]}
       />

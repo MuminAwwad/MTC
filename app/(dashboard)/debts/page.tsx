@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   PageHeader, SearchInput, StatusBadge, Pagination,
-  EmptyState, CardSkeleton, StatCard,
+  EmptyState, CardSkeleton, StatCard, ExportMenu,
 } from "@/components/shared";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
 import { formatDate } from "@/lib/formatters";
@@ -102,6 +102,7 @@ export default function DebtsPage() {
         title="ديون العملاء"
         subtitle={`${total} سجل`}
         breadcrumb={[{ label: "الرئيسية", href: "/dashboard" }, { label: "الديون" }]}
+        action={<ExportMenu type="debts" params={{ search, status }} />}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -12,6 +12,7 @@ import {
   Pagination,
   EmptyState,
   CardSkeleton,
+  ExportMenu,
 } from "@/components/shared";
 import {
   TICKET_STATUS_LABELS,
@@ -88,9 +89,12 @@ export default function MaintenancePage() {
         title="الصيانة"
         subtitle={`${total} تذكرة`}
         action={
-          <Link href="/maintenance/new">
-            <Button className="gap-2"><Plus className="h-4 w-4" />تذكرة جديدة</Button>
-          </Link>
+          <div className="flex gap-2 flex-wrap">
+            <ExportMenu type="tickets" params={{ search, status }} />
+            <Link href="/maintenance/new">
+              <Button className="gap-2"><Plus className="h-4 w-4" />تذكرة جديدة</Button>
+            </Link>
+          </div>
         }
         breadcrumb={[{ label: "الرئيسية", href: "/dashboard" }, { label: "الصيانة" }]}
       />

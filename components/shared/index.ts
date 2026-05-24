@@ -12,3 +12,4 @@ export { DataTable } from "./DataTable";
 export { Pagination } from "./Pagination";
 export { CustomerSelector } from "./CustomerSelector";
 export { ToastProvider, useToast } from "./Toast";
+export { ExportMenu } from "./ExportMenu";

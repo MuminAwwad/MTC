@@ -5,7 +5,7 @@ import { Plus, Wallet, Trash2, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  PageHeader, SearchInput, Pagination, EmptyState, CardSkeleton, StatCard, FormField, SectionCard,
+  PageHeader, SearchInput, Pagination, EmptyState, CardSkeleton, StatCard, FormField, SectionCard, ExportMenu,
 } from "@/components/shared";
 import { ITEMS_PER_PAGE, CURRENCY_LABELS } from "@/lib/constants";
 import { formatDate, formatCurrency } from "@/lib/formatters";
@@ -131,9 +131,15 @@ export default function ExpensesPage() {
         title="المصاريف"
         subtitle={`${total} سجل`}
         action={
-          <Button className="gap-2" onClick={() => setShowForm(true)}>
-            <Plus className="h-4 w-4" />مصروف جديد
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <ExportMenu
+              type="expenses"
+              params={{ search, categoryId: filterCategory, dateFrom, dateTo }}
+            />
+            <Button className="gap-2" onClick={() => setShowForm(true)}>
+              <Plus className="h-4 w-4" />مصروف جديد
+            </Button>
+          </div>
         }
         breadcrumb={[{ label: "الرئيسية", href: "/dashboard" }, { label: "المصاريف" }]}
       />

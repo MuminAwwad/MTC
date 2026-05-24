@@ -8,10 +8,143 @@ import {
 import { TrendingUp, TrendingDown, Package, CreditCard, ShoppingCart, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageHeader, SectionCard, StatCard, LoadingSkeleton } from "@/components/shared";
+import { PageHeader, SectionCard, StatCard, LoadingSkeleton, ExportMenu } from "@/components/shared";
 import { formatDate } from "@/lib/formatters";
+import type { ExportDataset } from "@/lib/export/datasets";
 
 type ReportType = "pl" | "sales" | "inventory" | "debts";
+
+const money = (n: number) => `₪${Number(n ?? 0).toFixed(2)}`;
+
+/** Maps the currently-loaded report data into a flat table for export. */
+function buildReportDataset(
+  tab: ReportType,
+  data: Record<string, unknown> | null,
+  dateFrom: string,
+  dateTo: string
+): ExportDataset | null {
+  if (!data) return null;
+  const range = ` (${dateFrom} ← ${dateTo})`;
+
+  if (tab === "pl") {
+    const d = data as {
+      revenue: { total: number; paid: number; outstanding: number; invoiceCount: number };
+      expenses: { total: number; count: number };
+      debtCollected: number;
+      netProfit: number;
+      profitMargin: string;
+    };
+    return {
+      title: "تقرير الأرباح والخسائر" + range,
+      filename: "profit-loss",
+      columns: [
+        { key: "item", header: "البند" },
+        { key: "value", header: "القيمة" },
+      ],
+      rows: [
+        { item: "إجمالي الإيرادات", value: money(d.revenue.total) },
+        { item: "المحصل", value: money(d.revenue.paid) },
+        { item: "الديون المعلقة", value: money(d.revenue.outstanding) },
+        { item: "عدد الفواتير", value: d.revenue.invoiceCount },
+        { item: "دفعات الديون المحصلة", value: money(d.debtCollected) },
+        { item: "إجمالي المصاريف", value: money(d.expenses.total) },
+        { item: "عدد المصاريف", value: d.expenses.count },
+        { item: "صافي الربح", value: money(d.netProfit) },
+        { item: "هامش الربح", value: `${d.profitMargin}%` },
+      ],
+    };
+  }
+
+  if (tab === "sales") {
+    const d = data as {
+      byDay: Array<{ date: string; revenue: number; count: number }>;
+      topCustomers: Array<{ name: string; revenue: number; count: number }>;
+    };
+    return {
+      title: "تقرير المبيعات" + range,
+      filename: "sales-report",
+      columns: [],
+      rows: [],
+      tables: [
+        {
+          name: "المبيعات اليومية",
+          columns: [
+            { key: "date", header: "التاريخ" },
+            { key: "revenue", header: "المبيعات" },
+            { key: "count", header: "عدد الفواتير" },
+          ],
+          rows: d.byDay.map((r) => ({
+            date: r.date,
+            revenue: Math.round(r.revenue * 100) / 100,
+            count: r.count,
+          })),
+        },
+        {
+          name: "أفضل العملاء",
+          columns: [
+            { key: "name", header: "العميل" },
+            { key: "count", header: "عدد الفواتير" },
+            { key: "revenue", header: "إجمالي المبيعات" },
+          ],
+          rows: d.topCustomers.map((c) => ({
+            name: c.name,
+            count: c.count,
+            revenue: Math.round(c.revenue * 100) / 100,
+          })),
+        },
+      ],
+    };
+  }
+
+  if (tab === "inventory") {
+    const d = data as {
+      lowStock: Array<{ name: string; sku: string | null; stockQty: number; minStockQty: number; sellPrice: number }>;
+    };
+    return {
+      title: "تقرير المخزون — منتجات تحت الحد الأدنى",
+      filename: "inventory-report",
+      columns: [
+        { key: "name", header: "المنتج" },
+        { key: "sku", header: "SKU" },
+        { key: "stockQty", header: "الكمية الحالية" },
+        { key: "minStockQty", header: "الحد الأدنى" },
+        { key: "shortage", header: "النقص" },
+        { key: "sellPrice", header: "سعر البيع" },
+      ],
+      rows: d.lowStock.map((p) => ({
+        name: p.name,
+        sku: p.sku ?? "—",
+        stockQty: p.stockQty,
+        minStockQty: p.minStockQty,
+        shortage: p.minStockQty - p.stockQty,
+        sellPrice: Math.round(p.sellPrice * 100) / 100,
+      })),
+    };
+  }
+
+  // debts aging
+  const d = data as {
+    debts: Array<{ remaining: number; daysSince: number; bucket: string; customer: { name: string }; dueDate: string | null }>;
+  };
+  return {
+    title: "تقرير تقادم الديون",
+    filename: "debts-aging",
+    columns: [
+      { key: "customer", header: "العميل" },
+      { key: "remaining", header: "المتبقي" },
+      { key: "days", header: "عدد الأيام" },
+      { key: "bucket", header: "الفئة" },
+      { key: "dueDate", header: "الاستحقاق" },
+    ],
+    rows: d.debts.map((debt) => ({
+      customer: debt.customer.name,
+      remaining: Math.round(debt.remaining * 100) / 100,
+      days: debt.daysSince,
+      bucket: debt.bucket,
+      dueDate: debt.dueDate ? formatDate(debt.dueDate) : "—",
+    })),
+  };
+}
 
 const REPORT_TABS: Array<{ type: ReportType; label: string; icon: React.ElementType }> = [
   { type: "pl", label: "الأرباح والخسائر", icon: TrendingUp },
@@ -51,6 +184,12 @@ export default function ReportsPage() {
       <PageHeader
         title="التقارير"
         breadcrumb={[{ label: "الرئيسية", href: "/dashboard" }, { label: "التقارير" }]}
+        action={
+          <ExportMenu
+            getDataset={() => buildReportDataset(activeTab, data, dateFrom, dateTo)}
+            disabled={loading || !data}
+          />
+        }
       />
 
       {/* Tabs */}

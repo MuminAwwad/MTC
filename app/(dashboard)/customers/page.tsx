@@ -11,6 +11,7 @@ import {
   EmptyState,
   Pagination,
   SectionCard,
+  ExportMenu,
 } from "@/components/shared";
 import { formatDate } from "@/lib/formatters";
 
@@ -53,12 +54,15 @@ export default function CustomersPage() {
         subtitle={`${meta.total} عميل`}
         breadcrumb={[{ label: "الرئيسية", href: "/dashboard" }, { label: "العملاء" }]}
         action={
-          <Button asChild>
-            <Link href="/customers/new">
-              <Plus className="h-4 w-4" />
-              عميل جديد
-            </Link>
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <ExportMenu type="customers" params={{ search }} />
+            <Button asChild>
+              <Link href="/customers/new">
+                <Plus className="h-4 w-4" />
+                عميل جديد
+              </Link>
+            </Button>
+          </div>
         }
       />
 

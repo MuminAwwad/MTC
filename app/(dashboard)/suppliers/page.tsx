@@ -10,6 +10,7 @@ import {
   EmptyState,
   Pagination,
   SectionCard,
+  ExportMenu,
 } from "@/components/shared";
 import { formatDate } from "@/lib/formatters";
 
@@ -49,12 +50,15 @@ export default function SuppliersPage() {
         subtitle={`${meta.total} مورد`}
         breadcrumb={[{ label: "الرئيسية", href: "/dashboard" }, { label: "الموردون" }]}
         action={
-          <Button asChild>
-            <Link href="/suppliers/new">
-              <Plus className="h-4 w-4" />
-              مورد جديد
-            </Link>
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <ExportMenu type="suppliers" params={{ search }} />
+            <Button asChild>
+              <Link href="/suppliers/new">
+                <Plus className="h-4 w-4" />
+                مورد جديد
+              </Link>
+            </Button>
+          </div>
         }
       />
 
