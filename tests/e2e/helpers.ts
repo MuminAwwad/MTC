@@ -39,10 +39,18 @@ export const cleanupInvoice = (r: APIRequestContext, id: string) =>
 export const cancelInvoice = (r: APIRequestContext, id: string) =>
   quiet(() => r.patch(`/api/invoices/${id}`, { data: { status: "CANCELLED" } }));
 
-/** Debts have no REST DELETE — purge via the assistant's hard-delete action. */
-export const cleanupDebt = (r: APIRequestContext, id: string) =>
+/** Hard-delete any entity via the assistant's delete action (used for rows the
+ * REST DELETE endpoints refuse, e.g. debts or delivered tickets). */
+export const hardDelete = (
+  r: APIRequestContext,
+  entity: "customer" | "supplier" | "product" | "invoice" | "expense" | "debt" | "ticket",
+  id: string
+) =>
   quiet(() =>
     r.post(`/api/chat/action`, {
-      data: { action: { kind: "delete_record", summary: "cleanup", payload: { entity: "debt", id } } },
+      data: { action: { kind: "delete_record", summary: "cleanup", payload: { entity, id } } },
     })
   );
+
+/** Debts have no REST DELETE — purge via the assistant's hard-delete action. */
+export const cleanupDebt = (r: APIRequestContext, id: string) => hardDelete(r, "debt", id);
