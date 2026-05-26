@@ -47,19 +47,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         },
       });
 
-      const debt = invoice.debts[0];
-      if (debt) {
-        const debtPaid = debt.payments.reduce((s, p) => s + Number(p.amount), 0) + payment;
-        const debtTotal = Number(debt.amount);
-        const debtStatus = debtPaid >= debtTotal ? "PAID" : "PARTIAL";
+      // Allocate the payment across the linked debts, earliest unpaid
+      // installment first (by due date, then creation order). Each installment
+      // absorbs up to its own remaining balance before the next one is touched.
+      const ordered = invoice.debts.slice().sort((a, b) => {
+        const da = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+        const db = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+        if (da !== db) return da - db;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
+
+      let leftover = payment;
+      for (const debt of ordered) {
+        if (leftover <= 0.0001) break;
+        const debtPaid = debt.payments.reduce((s, p) => s + Number(p.amount), 0);
+        const debtRemaining = Number(debt.amount) - debtPaid;
+        if (debtRemaining <= 0) continue;
+
+        const apply = Math.min(debtRemaining, leftover);
+        const debtStatus = debtPaid + apply >= Number(debt.amount) ? "PAID" : "PARTIAL";
 
         await tx.debtPayment.create({
-          data: { debtId: debt.id, amount: payment, note, createdById: ctx.dbUser.id },
+          data: { debtId: debt.id, amount: apply, note: note ?? null, createdById: ctx.dbUser.id },
         });
-        await tx.debt.update({
-          where: { id: debt.id },
-          data: { status: debtStatus },
-        });
+        await tx.debt.update({ where: { id: debt.id }, data: { status: debtStatus } });
+        leftover -= apply;
       }
 
       return inv;
