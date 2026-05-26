@@ -218,7 +218,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const invoice = await prisma.invoice.findFirst({
       where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
-      include: { items: true, debts: { where: { isDeleted: false } } },
+      include: { items: true, debts: { where: { isDeleted: false }, include: { payments: true } } },
     });
     if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
     if (invoice.status === "CANCELLED") {
@@ -335,28 +335,26 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           ? "PARTIAL"
           : "ISSUED";
 
-      // 5. Sync the linked debt.
-      const existingDebt = invoice.debts[0] ?? null;
-      if (newRemaining > 0) {
-        if (existingDebt) {
-          await tx.debt.update({
-            where: { id: existingDebt.id },
-            data: {
-              amount: newRemaining,
-              status: paid > 0 ? "PARTIAL" : "PENDING",
-              dueDate:
-                debtDetails && "dueDate" in debtDetails
-                  ? debtDetails.dueDate
-                    ? new Date(debtDetails.dueDate)
-                    : null
-                  : existingDebt.dueDate,
-              notes:
-                debtDetails && "notes" in debtDetails
-                  ? debtDetails.notes ?? null
-                  : existingDebt.notes,
-            },
+      // 5. Sync the linked debt(s). An invoice may be backed by several debts
+      // (an installment plan), each possibly carrying recorded payments, so we
+      // can't just rewrite debts[0] — we redistribute the new remaining across
+      // every linked debt while preserving what's already been paid.
+      const linked = invoice.debts;
+      const paidOf = (d: (typeof linked)[number]) =>
+        d.payments.reduce((s, p) => s + Number(p.amount), 0);
+      const debtPaidTotal = linked.reduce((s, d) => s + paidOf(d), 0);
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+
+      if (newRemaining <= 0) {
+        // Total dropped to (or below) what's already paid — settle & void debts.
+        if (linked.length > 0) {
+          await tx.debt.updateMany({
+            where: { invoiceId: id, isDeleted: false },
+            data: { isDeleted: true, status: "PAID" },
           });
-        } else if (invoice.status !== "DRAFT") {
+        }
+      } else if (linked.length === 0) {
+        if (invoice.status !== "DRAFT") {
           // Bill went up after editing — open a fresh debt row.
           await tx.debt.create({
             data: {
@@ -372,12 +370,55 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             },
           });
         }
-      } else if (existingDebt) {
-        // Total dropped to (or below) what was already paid — wipe the debt.
+      } else if (linked.length === 1 && debtPaidTotal === 0) {
+        // Simple, common case: a single unpaid debt — also let the caller edit
+        // its due date / notes.
+        const only = linked[0];
         await tx.debt.update({
-          where: { id: existingDebt.id },
-          data: { isDeleted: true, status: "PAID" },
+          where: { id: only.id },
+          data: {
+            amount: newRemaining,
+            status: "PENDING",
+            dueDate:
+              debtDetails && "dueDate" in debtDetails
+                ? debtDetails.dueDate
+                  ? new Date(debtDetails.dueDate)
+                  : null
+                : only.dueDate,
+            notes:
+              debtDetails && "notes" in debtDetails
+                ? debtDetails.notes ?? null
+                : only.notes,
+          },
         });
+      } else {
+        // Installments and/or recorded payments: spread the new remaining across
+        // the debts (proportional to each one's current outstanding balance, the
+        // increase landing on the last when everything is already paid), keeping
+        // each debt's amount at least its paid portion. Invariant preserved:
+        // Σ(amount) − Σ(payments) === invoice.remainingAmount.
+        const ordered = [...linked].sort((a, b) => {
+          const da = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+          const db = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+          if (da !== db) return da - db;
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        });
+        const rems = ordered.map((d) => Math.max(0, Number(d.amount) - paidOf(d)));
+        const totalRem = rems.reduce((s, r) => s + r, 0);
+
+        let assigned = 0;
+        for (let i = 0; i < ordered.length; i++) {
+          const d = ordered[i];
+          const paid_i = paidOf(d);
+          const share =
+            i === ordered.length - 1
+              ? round2(newRemaining - assigned)
+              : round2(totalRem > 0 ? newRemaining * (rems[i] / totalRem) : 0);
+          if (i < ordered.length - 1) assigned += share;
+          const amount = round2(paid_i + share);
+          const status = paid_i >= amount ? "PAID" : paid_i > 0 ? "PARTIAL" : "PENDING";
+          await tx.debt.update({ where: { id: d.id }, data: { amount, status } });
+        }
       }
 
       // Repoint the invoice + every linked debt at the new customer.
