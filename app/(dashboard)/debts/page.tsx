@@ -2,14 +2,15 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { CreditCard, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { CreditCard, Clock, AlertCircle, CheckCircle2, Plus, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   PageHeader, SearchInput, StatusBadge, Pagination,
-  EmptyState, CardSkeleton, StatCard, ExportMenu,
+  EmptyState, CardSkeleton, StatCard, ExportMenu, CustomerSelector, FormField, useToast,
 } from "@/components/shared";
-import { ITEMS_PER_PAGE } from "@/lib/constants";
+import { ITEMS_PER_PAGE, CURRENCY_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/formatters";
 import type { DebtStatus, Currency } from "@prisma/client";
 
@@ -48,6 +49,19 @@ export default function DebtsPage() {
   const [payNote, setPayNote] = useState("");
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState("");
+
+  const { toast } = useToast();
+  // Add/edit debt form. `formMode` null = closed; editingDebt set in edit mode.
+  const [formMode, setFormMode] = useState<"add" | "edit" | null>(null);
+  const [editingDebt, setEditingDebt] = useState<DebtRow | null>(null);
+  const [fCustomerId, setFCustomerId] = useState("");
+  const [fAmount, setFAmount] = useState("");
+  const [fCurrency, setFCurrency] = useState<Currency>("ILS");
+  const [fReason, setFReason] = useState("");
+  const [fDueDate, setFDueDate] = useState("");
+  const [fNotes, setFNotes] = useState("");
+  const [fSaving, setFSaving] = useState(false);
+  const [fError, setFError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,6 +104,81 @@ export default function DebtsPage() {
     setPaying(false);
   };
 
+  const openAddDebt = () => {
+    setEditingDebt(null);
+    setFCustomerId("");
+    setFAmount("");
+    setFCurrency("ILS");
+    setFReason("");
+    setFDueDate("");
+    setFNotes("");
+    setFError("");
+    setFormMode("add");
+  };
+
+  const openEditDebt = (d: DebtRow) => {
+    setEditingDebt(d);
+    setFCustomerId(d.customer.id);
+    setFAmount(Number(d.amount).toFixed(2));
+    setFCurrency(d.currency);
+    setFReason(d.reason ?? "");
+    setFDueDate(d.dueDate ? d.dueDate.slice(0, 10) : "");
+    setFNotes("");
+    setFError("");
+    setFormMode("edit");
+  };
+
+  const closeForm = () => { setFormMode(null); setEditingDebt(null); };
+
+  const submitDebtForm = async () => {
+    const amount = parseFloat(fAmount);
+    if (formMode === "add" && !fCustomerId) { setFError("اختر العميل"); return; }
+    const linked = !!editingDebt?.invoice;
+    if (!(formMode === "edit" && linked)) {
+      if (!amount || amount <= 0) { setFError("أدخل مبلغًا صحيحًا"); return; }
+    }
+    setFSaving(true);
+    setFError("");
+    try {
+      let res: Response;
+      if (formMode === "add") {
+        res = await fetch("/api/debts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customerId: fCustomerId,
+            amount,
+            currency: fCurrency,
+            reason: fReason || undefined,
+            dueDate: fDueDate || undefined,
+            notes: fNotes || undefined,
+          }),
+        });
+      } else {
+        res = await fetch(`/api/debts/${editingDebt!.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reason: fReason,
+            dueDate: fDueDate || null,
+            ...(fNotes.trim() ? { notes: fNotes } : {}),
+            // Amount/currency are read-only for invoice-linked debts.
+            ...(linked ? {} : { amount, currency: fCurrency }),
+          }),
+        });
+      }
+      const data = await res.json();
+      if (!res.ok) { setFError(data.error ?? "حدث خطأ"); return; }
+      toast(formMode === "add" ? "تمت إضافة الدين" : "تم تعديل الدين");
+      closeForm();
+      load();
+    } catch {
+      setFError("تعذّر الاتصال بالخادم");
+    } finally {
+      setFSaving(false);
+    }
+  };
+
   const isOverdue = (d: DebtRow) =>
     d.dueDate && new Date(d.dueDate) < new Date() && d.status !== "PAID";
 
@@ -102,7 +191,14 @@ export default function DebtsPage() {
         title="ديون العملاء"
         subtitle={`${total} سجل`}
         breadcrumb={[{ label: "الرئيسية", href: "/dashboard" }, { label: "الديون" }]}
-        action={<ExportMenu type="debts" params={{ search, status }} />}
+        action={
+          <div className="flex gap-2 flex-wrap">
+            <ExportMenu type="debts" params={{ search, status }} />
+            <Button className="gap-2" onClick={openAddDebt}>
+              <Plus className="h-4 w-4" />دين جديد
+            </Button>
+          </div>
+        }
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -175,11 +271,16 @@ export default function DebtsPage() {
                         {formatDate(d.dueDate)}
                       </span>
                     ) : <span />}
-                    {d.status !== "PAID" && (
-                      <Button size="sm" variant="outline" onClick={() => openPayment(d)}>
-                        تسجيل دفعة
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openEditDebt(d)}>
+                        <Pencil className="h-3.5 w-3.5" />تعديل
                       </Button>
-                    )}
+                      {d.status !== "PAID" && (
+                        <Button size="sm" variant="outline" onClick={() => openPayment(d)}>
+                          تسجيل دفعة
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </li>
               );
@@ -241,11 +342,16 @@ export default function DebtsPage() {
                         <StatusBadge status={{ type: "debt", status: d.status }} />
                       </td>
                       <td className="px-4 py-3">
-                        {d.status !== "PAID" && (
-                          <Button size="sm" variant="outline" onClick={() => openPayment(d)}>
-                            تسجيل دفعة
+                        <div className="flex items-center gap-2 justify-end">
+                          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openEditDebt(d)}>
+                            <Pencil className="h-3.5 w-3.5" />تعديل
                           </Button>
-                        )}
+                          {d.status !== "PAID" && (
+                            <Button size="sm" variant="outline" onClick={() => openPayment(d)}>
+                              تسجيل دفعة
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -283,6 +389,75 @@ export default function DebtsPage() {
           </div>
         </div>
       )}
+
+      {formMode && (() => {
+        const linked = !!editingDebt?.invoice;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+              <h3 className="text-lg font-bold text-[#0b2345]">
+                {formMode === "add" ? "دين جديد" : "تعديل الدين"}
+              </h3>
+
+              {formMode === "add" ? (
+                <FormField label="العميل" required>
+                  <CustomerSelector value={fCustomerId} onChange={(id) => setFCustomerId(id)} />
+                </FormField>
+              ) : (
+                <p className="text-sm text-[#64748b]">
+                  العميل: <span className="font-medium text-[#0b2345]">{editingDebt?.customer.name}</span>
+                  {linked && editingDebt?.invoice && (
+                    <span className="block mt-1 text-xs text-orange-600">
+                      مرتبط بالفاتورة {editingDebt.invoice.invoiceNumber} — المبلغ والعملة يُعدّلان من الفاتورة.
+                    </span>
+                  )}
+                </p>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="المبلغ" required={!linked}>
+                  <Input
+                    type="number" min="0.01" step="0.01" dir="ltr"
+                    value={fAmount}
+                    onChange={(e) => setFAmount(e.target.value)}
+                    disabled={linked}
+                  />
+                </FormField>
+                <FormField label="العملة">
+                  <select
+                    value={fCurrency}
+                    onChange={(e) => setFCurrency(e.target.value as Currency)}
+                    disabled={linked}
+                    className="w-full h-10 px-3 rounded-lg border border-[#e2e8f0] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#104e98] disabled:bg-[#f8fafc] disabled:text-[#94a3b8]"
+                  >
+                    {(Object.keys(CURRENCY_LABELS) as Currency[]).map((c) => (
+                      <option key={c} value={c}>{CURRENCY_LABELS[c]}</option>
+                    ))}
+                  </select>
+                </FormField>
+              </div>
+
+              <FormField label="السبب (اختياري)">
+                <Input value={fReason} onChange={(e) => setFReason(e.target.value)} placeholder="مثال: قرض، بضاعة..." />
+              </FormField>
+              <FormField label="تاريخ الاستحقاق (اختياري)">
+                <Input type="date" dir="ltr" value={fDueDate} onChange={(e) => setFDueDate(e.target.value)} />
+              </FormField>
+              <FormField label="ملاحظات (اختياري)">
+                <Textarea rows={2} value={fNotes} onChange={(e) => setFNotes(e.target.value)} />
+              </FormField>
+
+              {fError && <p className="text-xs text-red-600">{fError}</p>}
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={closeForm} disabled={fSaving}>إلغاء</Button>
+                <Button onClick={submitDebtForm} disabled={fSaving}>
+                  {fSaving ? "جاري الحفظ..." : formMode === "add" ? "إضافة" : "حفظ"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

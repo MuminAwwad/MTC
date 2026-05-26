@@ -63,6 +63,10 @@ function NewInvoiceForm() {
   const [partialPaid, setPartialPaid] = useState(0);
   const [debtDueDate, setDebtDueDate] = useState("");
   const [debtNotes, setDebtNotes] = useState("");
+  // Installment sale: split the remaining balance into N scheduled debts.
+  const [installmentsOn, setInstallmentsOn] = useState(false);
+  const [installmentCount, setInstallmentCount] = useState(3);
+  const [installmentFreq, setInstallmentFreq] = useState<"weekly" | "monthly">("monthly");
   const [loading, setLoading] = useState<"draft" | "issue" | null>(null);
   const [error, setError] = useState("");
   const [attachedTicket, setAttachedTicket] = useState<{ id: string; ticketNumber: string } | null>(null);
@@ -189,6 +193,24 @@ function NewInvoiceForm() {
   const paidAmount = isDebt ? Math.min(total, partialPaid) : total;
   const remaining = Math.max(0, total - paidAmount);
 
+  // Preview the installment plan: dates spaced by frequency from the first due
+  // date (or today), remaining split evenly with the last absorbing rounding.
+  const installmentSchedule = (() => {
+    if (!isDebt || !installmentsOn || remaining <= 0) return [] as { date: string; amount: number }[];
+    const n = Math.max(2, Math.floor(installmentCount) || 2);
+    const start = debtDueDate ? new Date(debtDueDate) : new Date();
+    const base = Math.floor((remaining / n) * 100) / 100;
+    return Array.from({ length: n }, (_, i) => {
+      const d = new Date(start);
+      if (installmentFreq === "weekly") d.setDate(d.getDate() + 7 * i);
+      else d.setMonth(d.getMonth() + i);
+      return {
+        date: d.toISOString().slice(0, 10),
+        amount: i === n - 1 ? Math.round((remaining - base * (n - 1)) * 100) / 100 : base,
+      };
+    });
+  })();
+
   const submit = async (status: "DRAFT" | "ISSUED") => {
     if (!customerId) { setError("يجب اختيار العميل"); return; }
     if (items.every((i) => !i.name)) { setError("يجب إضافة منتج واحد على الأقل"); return; }
@@ -225,6 +247,9 @@ function NewInvoiceForm() {
                   dueDate: debtDueDate || undefined,
                   notes: debtNotes || undefined,
                 },
+                ...(installmentsOn && installmentSchedule.length >= 2
+                  ? { installments: { dueDates: installmentSchedule.map((s) => s.date) } }
+                  : {}),
               }
             : {}),
         }),
@@ -538,6 +563,67 @@ function NewInvoiceForm() {
                   placeholder="مثال: اتفاق على سداد نصف الدين بعد أسبوعين"
                 />
               </FormField>
+
+              {/* Installment plan */}
+              <div className="pt-1 border-t border-orange-200">
+                <label className="flex items-center gap-3 cursor-pointer select-none mt-3">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-[#cbd5e1] text-[#104e98] focus:ring-[#104e98]"
+                    checked={installmentsOn}
+                    onChange={(e) => setInstallmentsOn(e.target.checked)}
+                  />
+                  <span className="text-sm font-medium text-[#1e293b]">تقسيم المتبقي إلى أقساط</span>
+                </label>
+
+                {installmentsOn && (
+                  <div className="mt-3 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField label="عدد الأقساط">
+                        <Input
+                          type="number"
+                          min="2"
+                          max="60"
+                          dir="ltr"
+                          value={installmentCount}
+                          onChange={(e) => setInstallmentCount(Math.max(2, parseInt(e.target.value) || 2))}
+                        />
+                      </FormField>
+                      <FormField label="التكرار">
+                        <div className="flex gap-1 bg-[#f1f5f9] rounded-lg p-1">
+                          {([["weekly", "أسبوعي"], ["monthly", "شهري"]] as const).map(([val, label]) => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setInstallmentFreq(val)}
+                              className={`flex-1 px-2 py-1.5 text-xs rounded-md font-medium transition-all ${
+                                installmentFreq === val ? "bg-white text-[#104e98] shadow-sm" : "text-[#64748b] hover:text-[#1e293b]"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </FormField>
+                    </div>
+                    <p className="text-xs text-[#64748b]">
+                      يبدأ القسط الأول من «تاريخ الاستحقاق» أعلاه (أو اليوم إن تُرك فارغًا).
+                    </p>
+                    {installmentSchedule.length >= 2 && (
+                      <div className="rounded-lg border border-orange-200 bg-white divide-y divide-[#f1f5f9]">
+                        {installmentSchedule.map((s, i) => (
+                          <div key={i} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                            <span className="text-[#64748b]">القسط {i + 1}</span>
+                            <span className="ltr text-[#94a3b8]">{s.date}</span>
+                            <span className="ltr font-medium text-[#0b2345]">₪{s.amount.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <dl className="grid grid-cols-3 gap-3 text-xs pt-2 border-t border-orange-200">
                 <div>
                   <dt className="text-[#64748b]">إجمالي الفاتورة</dt>

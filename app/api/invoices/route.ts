@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
       paidAmount = 0,
       ticketId,
       debt: debtDetails,
+      installments,
     } = body as {
       customerId?: string;
       items?: InvoiceItemInput[];
@@ -129,6 +130,7 @@ export async function POST(req: NextRequest) {
       paidAmount?: number;
       ticketId?: string;
       debt?: { dueDate?: string; notes?: string };
+      installments?: { dueDates?: string[] };
     };
 
     if (!customerId) return ok({ error: "العميل مطلوب" }, { status: 400 });
@@ -250,19 +252,48 @@ export async function POST(req: NextRequest) {
         }
 
         if (remaining > 0) {
-          await tx.debt.create({
-            data: {
-              ownerId: ctx.dbUser.id,
-              customerId,
-              invoiceId: created.id,
-              amount: remaining,
-              currency,
-              reason: `فاتورة ${invoiceNumber}`,
-              status: "PENDING",
-              dueDate: debtDetails?.dueDate ? new Date(debtDetails.dueDate) : null,
-              notes: debtDetails?.notes ?? null,
-            },
-          });
+          // Installment sale: split the remaining balance across the provided
+          // due dates as separate linked debts. Otherwise a single debt.
+          const dueDates = (installments?.dueDates ?? [])
+            .filter((d) => d && !Number.isNaN(new Date(d).getTime()));
+
+          if (dueDates.length >= 2) {
+            const n = dueDates.length;
+            const base = Math.floor((remaining / n) * 100) / 100;
+            for (let i = 0; i < n; i++) {
+              const amt =
+                i === n - 1
+                  ? Math.round((remaining - base * (n - 1)) * 100) / 100
+                  : base;
+              await tx.debt.create({
+                data: {
+                  ownerId: ctx.dbUser.id,
+                  customerId,
+                  invoiceId: created.id,
+                  amount: amt,
+                  currency,
+                  reason: `قسط ${i + 1}/${n} — فاتورة ${invoiceNumber}`,
+                  status: "PENDING",
+                  dueDate: new Date(dueDates[i]),
+                  notes: debtDetails?.notes ?? null,
+                },
+              });
+            }
+          } else {
+            await tx.debt.create({
+              data: {
+                ownerId: ctx.dbUser.id,
+                customerId,
+                invoiceId: created.id,
+                amount: remaining,
+                currency,
+                reason: `فاتورة ${invoiceNumber}`,
+                status: "PENDING",
+                dueDate: debtDetails?.dueDate ? new Date(debtDetails.dueDate) : null,
+                notes: debtDetails?.notes ?? null,
+              },
+            });
+          }
         }
 
         // If this invoice was generated from a repair ticket, mark

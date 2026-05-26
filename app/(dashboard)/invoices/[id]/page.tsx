@@ -10,7 +10,7 @@ import { PageHeader, StatusBadge, SectionCard, LoadingSkeleton, ConfirmDialog, C
 import { INVOICE_STATUS_LABELS } from "@/lib/constants";
 import { formatDate, formatDateTime } from "@/lib/formatters";
 import { InvoiceShareButton } from "@/components/invoices/InvoiceShareButton";
-import type { InvoiceStatus, Currency } from "@prisma/client";
+import type { InvoiceStatus, Currency, DebtStatus } from "@prisma/client";
 
 interface InvoiceDetail {
   id: string;
@@ -42,7 +42,9 @@ interface InvoiceDetail {
     id: string;
     amount: number;
     status: string;
+    reason: string | null;
     dueDate: string | null;
+    createdAt: string;
     payments: Array<{ id: string; amount: number; paidAt: string; note: string | null }>;
   }>;
 }
@@ -266,22 +268,75 @@ export default function InvoiceDetailPage() {
         </div>
       </SectionCard>
 
-      {/* Payment history */}
-      {invoice.debts.length > 0 && invoice.debts[0].payments.length > 0 && (
-        <SectionCard title="سجل الدفعات">
-          <ul className="divide-y divide-[#f1f5f9]">
-            {invoice.debts[0].payments.map((p) => (
-              <li key={p.id} className="flex items-center justify-between py-2.5 text-sm">
-                <div>
-                  <span className="font-medium text-[#1e293b] ltr">₪{Number(p.amount).toFixed(2)}</span>
-                  {p.note && <span className="text-[#64748b] mr-2">{p.note}</span>}
-                </div>
-                <span className="text-[#94a3b8]">{formatDateTime(p.paidAt)}</span>
-              </li>
-            ))}
-          </ul>
+      {/* Installments breakdown — only when the invoice was split into 2+ debts */}
+      {invoice.debts.length >= 2 && (
+        <SectionCard title={`الأقساط (${invoice.debts.length})`}>
+          <div className="overflow-x-auto -mx-2 sm:mx-0 px-2 sm:px-0">
+            <table className="w-full text-sm min-w-[460px]">
+              <thead>
+                <tr className="text-right border-b border-[#f1f5f9] text-xs text-[#64748b]">
+                  <th className="pb-2 font-medium">القسط</th>
+                  <th className="pb-2 font-medium">الاستحقاق</th>
+                  <th className="pb-2 font-medium">المبلغ</th>
+                  <th className="pb-2 font-medium">المسدّد</th>
+                  <th className="pb-2 font-medium">المتبقي</th>
+                  <th className="pb-2 font-medium">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f8fafc]">
+                {invoice.debts
+                  .slice()
+                  .sort((a, b) => {
+                    const da = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+                    const db = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+                    return da - db;
+                  })
+                  .map((d, i) => {
+                    const paid = d.payments.reduce((s, p) => s + Number(p.amount), 0);
+                    const rem = Number(d.amount) - paid;
+                    const overdue = d.dueDate && new Date(d.dueDate) < new Date() && d.status !== "PAID";
+                    const label = d.reason?.split(" — ")[0] ?? `قسط ${i + 1}`;
+                    return (
+                      <tr key={d.id} className={overdue ? "bg-red-50/40" : ""}>
+                        <td className="py-2 text-[#1e293b]">{label}</td>
+                        <td className="py-2 text-[#64748b]">{d.dueDate ? formatDate(d.dueDate) : "—"}</td>
+                        <td className="py-2 ltr font-medium">₪{Number(d.amount).toFixed(2)}</td>
+                        <td className="py-2 ltr text-green-600">{paid > 0 ? `₪${paid.toFixed(2)}` : "—"}</td>
+                        <td className="py-2 ltr text-orange-600">{rem > 0 ? `₪${rem.toFixed(2)}` : "—"}</td>
+                        <td className="py-2">
+                          <StatusBadge status={{ type: "debt", status: d.status as DebtStatus }} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
         </SectionCard>
       )}
+
+      {/* Payment history — aggregated across all linked debts/installments */}
+      {(() => {
+        const allPayments = invoice.debts
+          .flatMap((d) => d.payments)
+          .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
+        if (allPayments.length === 0) return null;
+        return (
+          <SectionCard title="سجل الدفعات">
+            <ul className="divide-y divide-[#f1f5f9]">
+              {allPayments.map((p) => (
+                <li key={p.id} className="flex items-center justify-between py-2.5 text-sm">
+                  <div>
+                    <span className="font-medium text-[#1e293b] ltr">₪{Number(p.amount).toFixed(2)}</span>
+                    {p.note && <span className="text-[#64748b] mr-2">{p.note}</span>}
+                  </div>
+                  <span className="text-[#94a3b8]">{formatDateTime(p.paidAt)}</span>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+        );
+      })()}
 
       {invoice.notes && (
         <SectionCard title="ملاحظات">
