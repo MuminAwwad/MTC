@@ -440,6 +440,86 @@ const TOOLS: ToolDefinition[] = [
   },
 
   {
+    name: "find_supplier",
+    description:
+      "Search suppliers by name, company, or phone (partial, case-insensitive). Returns up to 10 results with their id. Use this to get a supplier id before editing or deleting one.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Partial name / company / phone." },
+      },
+      required: ["query"],
+    },
+    execute: async (ownerId, args) => {
+      const q = String(args.query ?? "").trim();
+      if (!q) return { suppliers: [] };
+      const suppliers = await prisma.supplier.findMany({
+        where: {
+          ownerId,
+          isDeleted: false,
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { company: { contains: q, mode: "insensitive" } },
+            { phone: { contains: q } },
+          ],
+        },
+        take: 10,
+        select: { id: true, name: true, phone: true, company: true },
+        orderBy: { name: "asc" },
+      });
+      return { suppliers };
+    },
+  },
+
+  {
+    name: "find_ticket",
+    description:
+      "Search maintenance tickets by ticket number, customer name, or device. Returns up to 10 results with their id and current status. Use this to get a ticket id before updating its status.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Partial ticket number / customer name / device brand or model." },
+      },
+      required: ["query"],
+    },
+    execute: async (ownerId, args) => {
+      const q = String(args.query ?? "").trim();
+      if (!q) return { tickets: [] };
+      const tickets = await prisma.maintenanceTicket.findMany({
+        where: {
+          ownerId,
+          isDeleted: false,
+          OR: [
+            { ticketNumber: { contains: q, mode: "insensitive" } },
+            { customer: { name: { contains: q, mode: "insensitive" } } },
+            { deviceBrand: { contains: q, mode: "insensitive" } },
+            { deviceModel: { contains: q, mode: "insensitive" } },
+          ],
+        },
+        take: 10,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          ticketNumber: true,
+          status: true,
+          deviceBrand: true,
+          deviceModel: true,
+          customer: { select: { name: true } },
+        },
+      });
+      return {
+        tickets: tickets.map((t) => ({
+          id: t.id,
+          ticketNumber: t.ticketNumber,
+          status: t.status,
+          customerName: t.customer.name,
+          device: [t.deviceBrand, t.deviceModel].filter(Boolean).join(" ") || null,
+        })),
+      };
+    },
+  },
+
+  {
     name: "get_sales_period",
     description:
       "Aggregate revenue, invoice count, and average ticket size between two dates (inclusive). Date format: YYYY-MM-DD. If no dates are given the assistant should fall back to the last 7 days.",

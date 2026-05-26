@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, FormEvent } from "react";
-import { Sparkles, Send, Loader2, Paperclip, X, CheckCircle2, FileText } from "lucide-react";
+import { Sparkles, Send, Loader2, Paperclip, X, CheckCircle2, FileText, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader, SectionCard, useToast } from "@/components/shared";
@@ -32,7 +32,26 @@ interface AssistantImportMsg {
   resultSummary?: string;
 }
 
-type Msg = UserTextMsg | AssistantTextMsg | AssistantImportMsg;
+interface PendingAction {
+  kind: string;
+  summary: string;
+  warn?: string;
+  payload: Record<string, unknown>;
+}
+
+interface ActionItemState {
+  action: PendingAction;
+  status: "pending" | "running" | "done" | "cancelled";
+  resultSummary?: string;
+}
+
+interface AssistantActionMsg {
+  role: "assistant";
+  content: string; // optional header
+  items: ActionItemState[];
+}
+
+type Msg = UserTextMsg | AssistantTextMsg | AssistantImportMsg | AssistantActionMsg;
 
 const SUGGESTIONS = [
   "كم مبيعات اليوم؟",
@@ -44,6 +63,9 @@ const SUGGESTIONS = [
 
 const isImportMsg = (m: Msg): m is AssistantImportMsg =>
   m.role === "assistant" && "envelope" in m;
+
+const isActionMsg = (m: Msg): m is AssistantActionMsg =>
+  m.role === "assistant" && "items" in m;
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -72,9 +94,9 @@ export default function ChatPage() {
     setInput("");
     setLoading(true);
     try {
-      // Only forward text turns to /api/chat (it expects role/content shape).
+      // Only forward plain text turns to /api/chat (it expects role/content shape).
       const flat = nextHistory
-        .filter((m) => !isImportMsg(m))
+        .filter((m) => !isImportMsg(m) && !isActionMsg(m))
         .map((m) => ({ role: m.role, content: m.content }));
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -87,7 +109,24 @@ export default function ChatPage() {
         setMessages(messages);
         return;
       }
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply || "" }]);
+      const pending = Array.isArray(data.pendingActions)
+        ? (data.pendingActions as PendingAction[])
+        : [];
+      if (pending.length > 0) {
+        const replyText = (data.reply ?? "").trim();
+        const items: ActionItemState[] = pending.map((a) => ({ action: a, status: "pending" }));
+        setMessages((prev) => [
+          ...prev,
+          ...(replyText ? [{ role: "assistant", content: replyText } as AssistantTextMsg] : []),
+          {
+            role: "assistant",
+            content: replyText ? "" : "العمليات التالية بانتظار تأكيدك:",
+            items,
+          } as AssistantActionMsg,
+        ]);
+      } else {
+        setMessages((prev) => [...prev, { role: "assistant", content: data.reply || "" }]);
+      }
     } catch {
       toast("تعذّر الاتصال بالمساعد", "error");
       setMessages(messages);
@@ -188,6 +227,56 @@ export default function ChatPage() {
         i === index && isImportMsg(m) ? { ...m, status: "cancelled" } : m
       )
     );
+  };
+
+  // ── action confirm/cancel (write tools) ─────────────────────────────────
+  const setActionStatus = (
+    msgIndex: number,
+    itemIndex: number,
+    patch: Partial<ActionItemState>
+  ) => {
+    setMessages((prev) =>
+      prev.map((m, i) => {
+        if (i !== msgIndex || !isActionMsg(m)) return m;
+        return {
+          ...m,
+          items: m.items.map((it, j) => (j === itemIndex ? { ...it, ...patch } : it)),
+        };
+      })
+    );
+  };
+
+  const confirmAction = async (msgIndex: number, itemIndex: number) => {
+    const target = messages[msgIndex];
+    if (!target || !isActionMsg(target)) return;
+    const item = target.items[itemIndex];
+    if (!item || item.status !== "pending") return;
+    setActionStatus(msgIndex, itemIndex, { status: "running" });
+    try {
+      const res = await fetch("/api/chat/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: item.action }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        toast(data.error ?? "تعذّر تنفيذ العملية", "error");
+        setActionStatus(msgIndex, itemIndex, { status: "pending" });
+        return;
+      }
+      setActionStatus(msgIndex, itemIndex, {
+        status: "done",
+        resultSummary: data.summary ?? "تم التنفيذ.",
+      });
+      toast(data.summary ?? "تم التنفيذ");
+    } catch {
+      toast("تعذّر الاتصال بالخادم", "error");
+      setActionStatus(msgIndex, itemIndex, { status: "pending" });
+    }
+  };
+
+  const cancelAction = (msgIndex: number, itemIndex: number) => {
+    setActionStatus(msgIndex, itemIndex, { status: "cancelled" });
   };
 
   // ── form handlers ───────────────────────────────────────────────────────
@@ -315,6 +404,60 @@ export default function ChatPage() {
                         تم الإلغاء.
                       </div>
                     )}
+                  </div>
+                </div>
+              );
+            }
+
+            if (isActionMsg(m)) {
+              return (
+                <div key={i} className="flex justify-end">
+                  <div className="max-w-[85%] rounded-2xl rounded-tl-md px-4 py-3 text-sm bg-[#f1f5f9] text-[#1e293b] space-y-2 w-full">
+                    {m.content && <div className="text-[#64748b]">{m.content}</div>}
+                    {m.items.map((it, j) => (
+                      <div
+                        key={j}
+                        className="rounded-xl border border-[#e2e8f0] bg-white p-3 space-y-2"
+                      >
+                        <div className="break-words font-medium text-[#0b2345]">
+                          {it.action.summary}
+                        </div>
+                        {it.action.warn && it.status === "pending" && (
+                          <div className="flex items-start gap-1.5 text-xs text-red-600 bg-red-50 rounded-lg px-2 py-1.5">
+                            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                            <span>{it.action.warn}</span>
+                          </div>
+                        )}
+
+                        {it.status === "pending" && (
+                          <div className="flex gap-2 pt-1">
+                            <Button size="sm" onClick={() => void confirmAction(i, j)} className="gap-2">
+                              <CheckCircle2 className="h-4 w-4" />
+                              تأكيد
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => cancelAction(i, j)}>
+                              إلغاء
+                            </Button>
+                          </div>
+                        )}
+                        {it.status === "running" && (
+                          <div className="flex items-center gap-2 text-xs text-[#64748b]">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" /> جاري التنفيذ...
+                          </div>
+                        )}
+                        {it.status === "done" && (
+                          <div className="flex items-center gap-2 text-xs text-green-700 border-t border-[#e2e8f0] pt-2">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {it.resultSummary}
+                          </div>
+                        )}
+                        {it.status === "cancelled" && (
+                          <div className="text-xs text-[#94a3b8] border-t border-[#e2e8f0] pt-2">
+                            تم الإلغاء.
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
