@@ -1,15 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { InvoiceStatus } from "@prisma/client";
 import { issueStockFromInventory, returnStockToInventory, InsufficientStockError } from "@/lib/stock";
-import { requireUser } from "@/lib/auth";
+import { withAuth, ApiError } from "@/lib/api-handler";
 import { softDeleteInvoice } from "@/lib/services/invoices";
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireUser();
-  if (ctx instanceof NextResponse) return ctx;
-
+export const GET = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   try {
     const { id } = await params;
     const invoice = await prisma.invoice.findFirst({
@@ -30,12 +26,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     console.error(e);
     return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
-}
+});
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireUser();
-  if (ctx instanceof NextResponse) return ctx;
-
+export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   try {
     const { id } = await params;
     const body = await req.json();
@@ -153,7 +146,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     console.error(e);
     return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
-}
+});
 
 type InvoiceItemInput = {
   productId?: string | null;
@@ -184,10 +177,7 @@ type EditBody = {
  * remaining > 0 a new one is created. Cannot drop newTotal below
  * paidAmount — refund/cancel first.
  */
-export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireUser();
-  if (ctx instanceof NextResponse) return ctx;
-
+export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   try {
     const { id } = await params;
     const body = (await req.json()) as EditBody;
@@ -439,7 +429,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     console.error(e);
     return ok({ error: "خطأ في الخادم" }, { status: 500 });
   }
-}
+});
 
 /**
  * Delete an invoice in any status.
@@ -450,19 +440,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
  * - CANCELLED: stock was already returned on cancel, debts already voided —
  *   just soft-delete.
  */
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await requireUser();
-  if (ctx instanceof NextResponse) return ctx;
-
-  try {
-    const { id } = await params;
-    const deleted = await prisma.$transaction((tx) =>
-      softDeleteInvoice(tx, ctx.dbUser.id, ctx.dbUser.id, id)
-    );
-    if (!deleted) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
-    return ok({ success: true });
-  } catch (e) {
-    console.error(e);
-    return ok({ error: "خطأ في الخادم" }, { status: 500 });
-  }
-}
+export const DELETE = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
+  const { id } = await params;
+  const deleted = await prisma.$transaction((tx) =>
+    softDeleteInvoice(tx, ctx.dbUser.id, ctx.dbUser.id, id)
+  );
+  if (!deleted) throw new ApiError("الفاتورة غير موجودة", 404);
+  return ok({ success: true });
+});
