@@ -52,5 +52,6 @@ export const hardDelete = (
     })
   );
 
-/** Debts have no REST DELETE — purge via the assistant's hard-delete action. */
+/** Only manual debts have a REST DELETE; invoice-linked ones don't. Purge via
+ * the assistant's hard-delete action so cleanup works for both. */
 export const cleanupDebt = (r: APIRequestContext, id: string) => hardDelete(r, "debt", id);
