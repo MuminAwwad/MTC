@@ -87,8 +87,13 @@ export default function CustomerDetailPage() {
 
   useEffect(() => {
     fetch(`/api/customers/${id}`)
-      .then((r) => r.json())
-      .then((d) => {
+      .then(async (r) => {
+        // A missing/soft-deleted customer (reached via a stale link) or a
+        // server error returns an { error } body — don't treat it as a
+        // customer, or rendering `customer.stats` would crash. Leaving
+        // `customer` null surfaces the "not found" state below.
+        if (!r.ok) return;
+        const d = await r.json();
         setCustomer(d);
         setForm({
           name: d.name,
@@ -96,9 +101,8 @@ export default function CustomerDetailPage() {
           address: d.address ?? "",
           notes: d.notes ?? "",
         });
-        setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .finally(() => setLoading(false));
   }, [id]);
 
   const handleSave = async () => {
