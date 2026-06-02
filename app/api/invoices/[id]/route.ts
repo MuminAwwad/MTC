@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { InvoiceStatus } from "@prisma/client";
-import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
+import { issueStockFromInventory, returnStockToInventory, InsufficientStockError } from "@/lib/stock";
 import { requireUser } from "@/lib/auth";
+import { softDeleteInvoice } from "@/lib/services/invoices";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireUser();
@@ -62,17 +63,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (newStatus === "ISSUED" && invoice.status === "DRAFT") {
         for (const item of invoice.items) {
           if (item.productId && item.qty > 0) {
-            await decrementStockOrFail(tx, item.productId, item.qty);
-            await tx.stockMovement.create({
-              data: {
-                ownerId: ctx.dbUser.id,
-                productId: item.productId,
-                createdById: ctx.dbUser.id,
-                type: "OUT",
-                qty: item.qty,
-                note: `فاتورة ${invoice.invoiceNumber}`,
-                reference: invoice.invoiceNumber,
-              },
+            await issueStockFromInventory(tx, {
+              ownerId: ctx.dbUser.id,
+              userId: ctx.dbUser.id,
+              productId: item.productId,
+              qty: item.qty,
+              note: `فاتورة ${invoice.invoiceNumber}`,
+              reference: invoice.invoiceNumber,
             });
           }
         }
@@ -111,20 +108,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (newStatus === "CANCELLED" && invoice.status !== "DRAFT") {
         for (const item of invoice.items) {
           if (item.productId && item.qty > 0) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { stockQty: { increment: item.qty } },
-            });
-            await tx.stockMovement.create({
-              data: {
-                ownerId: ctx.dbUser.id,
-                productId: item.productId,
-                createdById: ctx.dbUser.id,
-                type: "IN",
-                qty: item.qty,
-                note: `إلغاء فاتورة ${invoice.invoiceNumber}`,
-                reference: invoice.invoiceNumber,
-              },
+            await returnStockToInventory(tx, {
+              ownerId: ctx.dbUser.id,
+              userId: ctx.dbUser.id,
+              productId: item.productId,
+              qty: item.qty,
+              note: `إلغاء فاتورة ${invoice.invoiceNumber}`,
+              reference: invoice.invoiceNumber,
             });
           }
         }
@@ -270,20 +260,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (stockWasMoved) {
         for (const old of invoice.items) {
           if (old.productId && old.qty > 0) {
-            await tx.product.update({
-              where: { id: old.productId },
-              data: { stockQty: { increment: old.qty } },
-            });
-            await tx.stockMovement.create({
-              data: {
-                ownerId: ctx.dbUser.id,
-                productId: old.productId,
-                createdById: ctx.dbUser.id,
-                type: "IN",
-                qty: old.qty,
-                note: `تعديل فاتورة ${invoice.invoiceNumber} — إرجاع`,
-                reference: invoice.invoiceNumber,
-              },
+            await returnStockToInventory(tx, {
+              ownerId: ctx.dbUser.id,
+              userId: ctx.dbUser.id,
+              productId: old.productId,
+              qty: old.qty,
+              note: `تعديل فاتورة ${invoice.invoiceNumber} — إرجاع`,
+              reference: invoice.invoiceNumber,
             });
           }
         }
@@ -308,17 +291,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (stockWasMoved) {
         for (const item of items) {
           if (item.productId && item.qty > 0) {
-            await decrementStockOrFail(tx, item.productId, item.qty);
-            await tx.stockMovement.create({
-              data: {
-                ownerId: ctx.dbUser.id,
-                productId: item.productId,
-                createdById: ctx.dbUser.id,
-                type: "OUT",
-                qty: item.qty,
-                note: `تعديل فاتورة ${invoice.invoiceNumber}`,
-                reference: invoice.invoiceNumber,
-              },
+            await issueStockFromInventory(tx, {
+              ownerId: ctx.dbUser.id,
+              userId: ctx.dbUser.id,
+              productId: item.productId,
+              qty: item.qty,
+              note: `تعديل فاتورة ${invoice.invoiceNumber}`,
+              reference: invoice.invoiceNumber,
             });
           }
         }
@@ -477,46 +456,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   try {
     const { id } = await params;
-    const invoice = await prisma.invoice.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
-      include: { items: true },
-    });
-    if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
-
-    const needsStockReversal =
-      invoice.status === "ISSUED" ||
-      invoice.status === "PARTIAL" ||
-      invoice.status === "PAID";
-
-    await prisma.$transaction(async (tx) => {
-      if (needsStockReversal) {
-        for (const item of invoice.items) {
-          if (item.productId && item.qty > 0) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { stockQty: { increment: item.qty } },
-            });
-            await tx.stockMovement.create({
-              data: {
-                ownerId: ctx.dbUser.id,
-                productId: item.productId,
-                createdById: ctx.dbUser.id,
-                type: "IN",
-                qty: item.qty,
-                note: `حذف فاتورة ${invoice.invoiceNumber}`,
-                reference: invoice.invoiceNumber,
-              },
-            });
-          }
-        }
-        await tx.debt.updateMany({
-          where: { invoiceId: id, isDeleted: false },
-          data: { isDeleted: true },
-        });
-      }
-      await tx.invoice.update({ where: { id }, data: { isDeleted: true } });
-    });
-
+    const deleted = await prisma.$transaction((tx) =>
+      softDeleteInvoice(tx, ctx.dbUser.id, ctx.dbUser.id, id)
+    );
+    if (!deleted) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
     return ok({ success: true });
   } catch (e) {
     console.error(e);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
+import { softDeleteDebt } from "@/lib/services/debts";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireUser();
@@ -41,18 +42,16 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    const debt = await prisma.debt.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
-      select: { id: true, invoiceId: true },
-    });
-    if (!debt) return ok({ error: "الدين غير موجود" }, { status: 404 });
-    if (debt.invoiceId) {
+    const result = await prisma.$transaction((tx) =>
+      softDeleteDebt(tx, ctx.dbUser.id, id)
+    );
+    if (result === "not_found") return ok({ error: "الدين غير موجود" }, { status: 404 });
+    if (result === "linked") {
       return ok(
         { error: "هذا الدين مرتبط بفاتورة. احذف الفاتورة بدلًا من ذلك." },
         { status: 400 }
       );
     }
-    await prisma.debt.update({ where: { id }, data: { isDeleted: true } });
     return ok({ success: true });
   } catch (e) {
     console.error(e);

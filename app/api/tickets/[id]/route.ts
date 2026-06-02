@@ -3,6 +3,7 @@ import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { TicketStatus, TicketPriority, DeviceType } from "@prisma/client";
 import { requireUser } from "@/lib/auth";
+import { softDeleteTicket } from "@/lib/services/tickets";
 
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   RECEIVED: ["DIAGNOSING", "CANCELLED"],
@@ -179,35 +180,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   try {
     const { id } = await params;
-    const ticket = await prisma.maintenanceTicket.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
-      include: { parts: true },
-    });
-    if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
-
-    await prisma.$transaction(async (tx) => {
-      for (const part of ticket.parts) {
-        if (part.productId && part.qty > 0) {
-          await tx.product.update({
-            where: { id: part.productId },
-            data: { stockQty: { increment: part.qty } },
-          });
-          await tx.stockMovement.create({
-            data: {
-              ownerId: ctx.dbUser.id,
-              productId: part.productId,
-              createdById: ctx.dbUser.id,
-              type: "IN",
-              qty: part.qty,
-              note: `حذف تذكرة ${ticket.ticketNumber}`,
-              reference: ticket.ticketNumber,
-            },
-          });
-        }
-      }
-      await tx.maintenanceTicket.update({ where: { id }, data: { isDeleted: true } });
-    });
-
+    const deleted = await prisma.$transaction((tx) =>
+      softDeleteTicket(tx, ctx.dbUser.id, ctx.dbUser.id, id)
+    );
+    if (!deleted) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
     return ok({ success: true });
   } catch (e) {
     console.error(e);

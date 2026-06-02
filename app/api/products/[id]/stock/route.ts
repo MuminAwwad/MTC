@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { z } from "zod/v4";
 import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
 import { requireUser } from "@/lib/auth";

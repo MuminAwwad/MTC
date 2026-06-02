@@ -41,3 +41,46 @@ export async function decrementStockOrFail(
     );
   }
 }
+
+export interface StockMovementInput {
+  ownerId: string;
+  userId: string;
+  productId: string;
+  qty: number;
+  note: string;
+  reference?: string | null;
+}
+
+/**
+ * Return `qty` units to a product's on-hand stock and log an IN movement.
+ * Used wherever a stock-affecting document is reversed (invoice cancel/edit/
+ * delete, ticket part removal/delete). No-op for non-positive quantities.
+ */
+export async function returnStockToInventory(
+  tx: Prisma.TransactionClient,
+  { ownerId, userId, productId, qty, note, reference = null }: StockMovementInput
+): Promise<void> {
+  if (qty <= 0) return;
+  await tx.product.update({
+    where: { id: productId },
+    data: { stockQty: { increment: qty } },
+  });
+  await tx.stockMovement.create({
+    data: { ownerId, productId, createdById: userId, type: "IN", qty, note, reference },
+  });
+}
+
+/**
+ * Draw `qty` units from a product's on-hand stock (failing if insufficient)
+ * and log an OUT movement. The atomic counterpart to returnStockToInventory.
+ */
+export async function issueStockFromInventory(
+  tx: Prisma.TransactionClient,
+  { ownerId, userId, productId, qty, note, reference = null }: StockMovementInput
+): Promise<void> {
+  if (qty <= 0) return;
+  await decrementStockOrFail(tx, productId, qty);
+  await tx.stockMovement.create({
+    data: { ownerId, productId, createdById: userId, type: "OUT", qty, note, reference },
+  });
+}
