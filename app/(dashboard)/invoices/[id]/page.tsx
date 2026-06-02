@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { Printer, CreditCard, X, CheckCircle2, AlertCircle, Pencil } from "lucide-react";
+import { Printer, CreditCard, X, CheckCircle2, AlertCircle, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader, StatusBadge, SectionCard, LoadingSkeleton, ConfirmDialog, CurrencyDisplay, useToast } from "@/components/shared";
@@ -61,6 +61,7 @@ export default function InvoiceDetailPage() {
   const [paying, setPaying] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -86,6 +87,22 @@ export default function InvoiceDetailPage() {
       toast(newStatus === "ISSUED" ? "تم إصدار الفاتورة" : newStatus === "CANCELLED" ? "تم إلغاء الفاتورة" : "تم تحديث الحالة");
     } else { const d = await res.json(); setError(d.error ?? "حدث خطأ"); toast(d.error ?? "حدث خطأ", "error"); }
     setActionLoading(false);
+  };
+
+  const deleteInvoice = async () => {
+    setActionLoading(true);
+    setError("");
+    const res = await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast("تم حذف الفاتورة");
+      router.push("/invoices");
+    } else {
+      const d = await res.json();
+      setError(d.error ?? "حدث خطأ");
+      toast(d.error ?? "حدث خطأ", "error");
+      setActionLoading(false);
+      setDeleteConfirm(false);
+    }
   };
 
   const addPayment = async () => {
@@ -119,6 +136,16 @@ export default function InvoiceDetailPage() {
   const canPay = ["ISSUED", "PARTIAL"].includes(invoice.status);
   const canCancel = ["DRAFT", "ISSUED", "PARTIAL"].includes(invoice.status);
   const canEdit = invoice.status !== "CANCELLED";
+  // Delete is now allowed in any status — for non-draft non-cancelled invoices,
+  // the API reverses stock and voids linked debts as a side-effect.
+  const canDelete = true;
+  // Describe what will happen so the user isn't surprised.
+  const deleteDescription =
+    invoice.status === "DRAFT"
+      ? "سيتم حذف هذه المسودّة نهائيًا. لا يمكن التراجع."
+      : invoice.status === "CANCELLED"
+      ? "هذه الفاتورة ملغاة — سيتم حذفها نهائيًا. لا يمكن التراجع."
+      : "سيتم حذف الفاتورة نهائيًا، وإرجاع المخزون المخصوم، وإلغاء الديون المرتبطة بها. لا يمكن التراجع.";
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -166,6 +193,11 @@ export default function InvoiceDetailPage() {
             {canCancel && (
               <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setCancelConfirm(true)}>
                 <X className="h-4 w-4" />إلغاء
+              </Button>
+            )}
+            {canDelete && (
+              <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setDeleteConfirm(true)}>
+                <Trash2 className="h-4 w-4" />حذف
               </Button>
             )}
           </div>
@@ -387,6 +419,16 @@ export default function InvoiceDetailPage() {
         onConfirm={() => changeStatus("CANCELLED")}
         title="إلغاء الفاتورة"
         description="هل أنت متأكد من إلغاء هذه الفاتورة؟ سيتم إعادة المخزون المخصوم."
+        variant="danger"
+        loading={actionLoading}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirm}
+        onClose={() => setDeleteConfirm(false)}
+        onConfirm={deleteInvoice}
+        title="حذف الفاتورة"
+        description={deleteDescription}
         variant="danger"
         loading={actionLoading}
       />

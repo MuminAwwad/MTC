@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { CreditCard, Clock, AlertCircle, CheckCircle2, Plus, Pencil } from "lucide-react";
+import { CreditCard, Clock, AlertCircle, CheckCircle2, Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   PageHeader, SearchInput, StatusBadge, Pagination,
-  EmptyState, CardSkeleton, StatCard, ExportMenu, CustomerSelector, FormField, useToast,
+  EmptyState, CardSkeleton, StatCard, ExportMenu, CustomerSelector, FormField, ConfirmDialog, useToast,
 } from "@/components/shared";
 import { ITEMS_PER_PAGE, CURRENCY_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/formatters";
@@ -62,6 +62,10 @@ export default function DebtsPage() {
   const [fNotes, setFNotes] = useState("");
   const [fSaving, setFSaving] = useState(false);
   const [fError, setFError] = useState("");
+
+  // Delete confirmation (manual debts only — linked ones are deleted via the invoice).
+  const [deletingDebt, setDeletingDebt] = useState<DebtRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -179,6 +183,21 @@ export default function DebtsPage() {
     }
   };
 
+  const deleteDebt = async () => {
+    if (!deletingDebt) return;
+    setDeleting(true);
+    const res = await fetch(`/api/debts/${deletingDebt.id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast("تم حذف الدين");
+      setDeletingDebt(null);
+      load();
+    } else {
+      const d = await res.json();
+      toast(d.error ?? "تعذّر حذف الدين", "error");
+    }
+    setDeleting(false);
+  };
+
   const isOverdue = (d: DebtRow) =>
     d.dueDate && new Date(d.dueDate) < new Date() && d.status !== "PAID";
 
@@ -280,6 +299,17 @@ export default function DebtsPage() {
                           تسجيل دفعة
                         </Button>
                       )}
+                      {!d.invoice && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => setDeletingDebt(d)}
+                          aria-label="حذف"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </li>
@@ -349,6 +379,17 @@ export default function DebtsPage() {
                           {d.status !== "PAID" && (
                             <Button size="sm" variant="outline" onClick={() => openPayment(d)}>
                               تسجيل دفعة
+                            </Button>
+                          )}
+                          {!d.invoice && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 border-red-200 hover:bg-red-50"
+                              onClick={() => setDeletingDebt(d)}
+                              aria-label="حذف"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </div>
@@ -458,6 +499,20 @@ export default function DebtsPage() {
           </div>
         );
       })()}
+
+      <ConfirmDialog
+        open={!!deletingDebt}
+        onClose={() => setDeletingDebt(null)}
+        onConfirm={deleteDebt}
+        title="حذف الدين"
+        description={
+          deletingDebt && deletingDebt.payments.length > 0
+            ? "سيتم حذف هذا الدين نهائيًا. الدفعات المسجّلة ستبقى كسجل تاريخي. لا يمكن التراجع."
+            : "سيتم حذف هذا الدين نهائيًا. لا يمكن التراجع."
+        }
+        variant="danger"
+        loading={deleting}
+      />
     </div>
   );
 }

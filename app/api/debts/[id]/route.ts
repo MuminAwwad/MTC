@@ -25,6 +25,41 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
+/**
+ * Delete a debt. Only manual (standalone) debts can be deleted here: an
+ * invoice-backed debt mirrors the invoice's denormalized money totals, so
+ * removing it on its own would desync the invoice — delete/cancel the invoice
+ * instead, which voids its linked debt as a side-effect. Recorded payments
+ * stay attached to the (now soft-deleted) debt as a historical record.
+ */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const ctx = await requireUser();
+  if (ctx instanceof NextResponse) return ctx;
+
+  try {
+    const { id } = await params;
+    const debt = await prisma.debt.findFirst({
+      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      select: { id: true, invoiceId: true },
+    });
+    if (!debt) return ok({ error: "الدين غير موجود" }, { status: 404 });
+    if (debt.invoiceId) {
+      return ok(
+        { error: "هذا الدين مرتبط بفاتورة. احذف الفاتورة بدلًا من ذلك." },
+        { status: 400 }
+      );
+    }
+    await prisma.debt.update({ where: { id }, data: { isDeleted: true } });
+    return ok({ success: true });
+  } catch (e) {
+    console.error(e);
+    return ok({ error: "خطأ في الخادم" }, { status: 500 });
+  }
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireUser();
   if (ctx instanceof NextResponse) return ctx;

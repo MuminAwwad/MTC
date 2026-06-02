@@ -462,6 +462,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
+/**
+ * Delete an invoice in any status.
+ * - DRAFT: plain soft-delete (no stock or debt side-effects to reverse).
+ * - ISSUED/PARTIAL/PAID: reverse stock movements and soft-delete linked
+ *   debts, then soft-delete the invoice. Payments stay as a historical
+ *   record on the (now soft-deleted) debts.
+ * - CANCELLED: stock was already returned on cancel, debts already voided —
+ *   just soft-delete.
+ */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireUser();
   if (ctx instanceof NextResponse) return ctx;
@@ -470,12 +479,44 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const { id } = await params;
     const invoice = await prisma.invoice.findFirst({
       where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      include: { items: true },
     });
     if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
-    if (invoice.status !== "DRAFT") {
-      return ok({ error: "يمكن حذف المسودات فقط" }, { status: 400 });
-    }
-    await prisma.invoice.update({ where: { id }, data: { isDeleted: true } });
+
+    const needsStockReversal =
+      invoice.status === "ISSUED" ||
+      invoice.status === "PARTIAL" ||
+      invoice.status === "PAID";
+
+    await prisma.$transaction(async (tx) => {
+      if (needsStockReversal) {
+        for (const item of invoice.items) {
+          if (item.productId && item.qty > 0) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stockQty: { increment: item.qty } },
+            });
+            await tx.stockMovement.create({
+              data: {
+                ownerId: ctx.dbUser.id,
+                productId: item.productId,
+                createdById: ctx.dbUser.id,
+                type: "IN",
+                qty: item.qty,
+                note: `حذف فاتورة ${invoice.invoiceNumber}`,
+                reference: invoice.invoiceNumber,
+              },
+            });
+          }
+        }
+        await tx.debt.updateMany({
+          where: { invoiceId: id, isDeleted: false },
+          data: { isDeleted: true },
+        });
+      }
+      await tx.invoice.update({ where: { id }, data: { isDeleted: true } });
+    });
+
     return ok({ success: true });
   } catch (e) {
     console.error(e);

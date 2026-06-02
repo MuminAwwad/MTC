@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Wallet, Trash2, Tag } from "lucide-react";
+import { Plus, Wallet, Trash2, Tag, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,8 +35,9 @@ export default function ExpensesPage() {
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Add expense form
+  // Add / edit expense form. `editingId` is null when adding.
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ categoryId: "", amount: "", currency: "ILS" as Currency, description: "", date: new Date().toISOString().split("T")[0] });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -88,24 +89,52 @@ export default function ExpensesPage() {
     setAddingCat(false);
   };
 
+  const openCreate = () => {
+    setEditingId(null);
+    setForm({ categoryId: "", amount: "", currency: "ILS", description: "", date: new Date().toISOString().split("T")[0] });
+    setFormError("");
+    setShowForm(true);
+  };
+
+  const openEdit = (exp: ExpenseRow) => {
+    setEditingId(exp.id);
+    setForm({
+      categoryId: exp.category?.id ?? "",
+      amount: String(Number(exp.amount)),
+      currency: exp.currency,
+      description: exp.description ?? "",
+      date: exp.date.slice(0, 10),
+    });
+    setFormError("");
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setFormError("");
+  };
+
   const submitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.amount || parseFloat(form.amount) <= 0) { setFormError("أدخل مبلغًا صحيحًا"); return; }
     setSaving(true);
     setFormError("");
-    const res = await fetch("/api/expenses", {
-      method: "POST",
+    const url = editingId ? `/api/expenses/${editingId}` : "/api/expenses";
+    const method = editingId ? "PATCH" : "POST";
+    const res = await fetch(url, {
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        categoryId: form.categoryId || undefined,
+        categoryId: form.categoryId || (editingId ? null : undefined),
         amount: parseFloat(form.amount),
         currency: form.currency,
-        description: form.description || undefined,
+        description: form.description || (editingId ? null : undefined),
         date: form.date,
       }),
     });
     if (res.ok) {
-      setShowForm(false);
+      closeForm();
       setForm({ categoryId: "", amount: "", currency: "ILS", description: "", date: new Date().toISOString().split("T")[0] });
       load();
     } else {
@@ -116,11 +145,7 @@ export default function ExpensesPage() {
   };
 
   const deleteExpense = async () => {
-    await fetch("/api/expenses", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: deleteId }),
-    });
+    await fetch(`/api/expenses/${deleteId}`, { method: "DELETE" });
     setDeleteId("");
     load();
   };
@@ -136,7 +161,7 @@ export default function ExpensesPage() {
               type="expenses"
               params={{ search, categoryId: filterCategory, dateFrom, dateTo }}
             />
-            <Button className="gap-2" onClick={() => setShowForm(true)}>
+            <Button className="gap-2" onClick={openCreate}>
               <Plus className="h-4 w-4" />مصروف جديد
             </Button>
           </div>
@@ -168,9 +193,9 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      {/* Add expense form */}
+      {/* Add / edit expense form */}
       {showForm && (
-        <SectionCard title="إضافة مصروف">
+        <SectionCard title={editingId ? "تعديل المصروف" : "إضافة مصروف"}>
           <form onSubmit={submitExpense} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <FormField label="الفئة">
@@ -226,8 +251,10 @@ export default function ExpensesPage() {
 
             {formError && <p className="text-xs text-red-600">{formError}</p>}
             <div className="flex gap-2 justify-end">
-              <Button type="button" variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
-              <Button type="submit" disabled={saving}>{saving ? "جاري الحفظ..." : "حفظ المصروف"}</Button>
+              <Button type="button" variant="outline" onClick={closeForm}>إلغاء</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "جاري الحفظ..." : editingId ? "حفظ التعديلات" : "حفظ المصروف"}
+              </Button>
             </div>
           </form>
         </SectionCard>
@@ -236,7 +263,7 @@ export default function ExpensesPage() {
       {loading ? (
         <CardSkeleton />
       ) : expenses.length === 0 ? (
-        <EmptyState icon={Wallet} title="لا توجد مصاريف" description="أضف أول مصروف للبدء" action={{ label: "مصروف جديد", onClick: () => setShowForm(true) }} />
+        <EmptyState icon={Wallet} title="لا توجد مصاريف" description="أضف أول مصروف للبدء" action={{ label: "مصروف جديد", onClick: openCreate }} />
       ) : (
         <>
           {/* Mobile: cards */}
@@ -258,9 +285,14 @@ export default function ExpensesPage() {
                       {exp.currency === "ILS" ? "₪" : exp.currency === "USD" ? "$" : "JD"}
                       {Number(exp.amount).toFixed(2)}
                     </span>
-                    <button onClick={() => setDeleteId(exp.id)} className="text-[#94a3b8] hover:text-red-500">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => openEdit(exp)} className="text-[#94a3b8] hover:text-[#104e98]" aria-label="تعديل">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => setDeleteId(exp.id)} className="text-[#94a3b8] hover:text-red-500" aria-label="حذف">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </li>
@@ -302,9 +334,14 @@ export default function ExpensesPage() {
                       {Number(exp.amount).toFixed(2)}
                     </td>
                     <td className="px-4 py-3">
-                      <button onClick={() => setDeleteId(exp.id)} className="text-[#94a3b8] hover:text-red-500">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-3 justify-end">
+                        <button onClick={() => openEdit(exp)} className="text-[#94a3b8] hover:text-[#104e98]" aria-label="تعديل">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => setDeleteId(exp.id)} className="text-[#94a3b8] hover:text-red-500" aria-label="حذف">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

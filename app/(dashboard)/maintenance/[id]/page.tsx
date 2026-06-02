@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Printer, ChevronLeft, ChevronRight, Plus, Trash2,
-  CheckCircle2, Clock, Package, MessageSquare, FileText,
+  CheckCircle2, Clock, Package, MessageSquare, FileText, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,11 +87,14 @@ const STATUS_ICONS: Record<TicketStatus, React.ReactNode> = {
 
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { toast } = useToast();
 
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Status transition
   const [statusNote, setStatusNote] = useState("");
@@ -209,6 +212,22 @@ export default function TicketDetailPage() {
     setDeletePartId("");
   };
 
+  const deleteTicket = async () => {
+    setDeleteLoading(true);
+    setError("");
+    const res = await fetch(`/api/tickets/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast("تم حذف التذكرة");
+      router.push("/maintenance");
+    } else {
+      const d = await res.json();
+      setError(d.error ?? "حدث خطأ");
+      toast(d.error ?? "حدث خطأ", "error");
+      setDeleteLoading(false);
+      setDeleteConfirm(false);
+    }
+  };
+
   const addNote = async () => {
     if (!noteText.trim()) return;
     setAddingNote(true);
@@ -232,6 +251,17 @@ export default function TicketDetailPage() {
   const partsTotal = ticket.parts.reduce((s, p) => s + Number(p.total), 0);
   const currentFlowIndex = TICKET_FLOW.indexOf(ticket.status);
   const isTerminal = ticket.status === "DELIVERED" || ticket.status === "CANCELLED";
+  const canEdit = !isTerminal;
+  // Delete is allowed in any status — for in-flight tickets the API restores
+  // any parts that were drawn from stock. The linked invoice (if any) is
+  // left in place and can be deleted separately.
+  const canDelete = true;
+  const hasPartsToReturn = ticket.parts.some((p) => p.product);
+  const deleteDescription = ticket.invoice
+    ? `هذه التذكرة مرتبطة بالفاتورة ${ticket.invoice.invoiceNumber}. سيتم حذف التذكرة فقط${hasPartsToReturn ? "، وإرجاع قطع الغيار للمخزون" : ""}. الفاتورة ستبقى — احذفها بشكل منفصل إن أردت. لا يمكن التراجع.`
+    : hasPartsToReturn
+    ? "سيتم حذف التذكرة نهائيًا وإرجاع قطع الغيار للمخزون. لا يمكن التراجع."
+    : "سيتم حذف هذه التذكرة نهائيًا. لا يمكن التراجع.";
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -245,6 +275,13 @@ export default function TicketDetailPage() {
         ]}
         action={
           <div className="flex gap-2 flex-wrap">
+            {canEdit && (
+              <Link href={`/maintenance/${id}/edit`}>
+                <Button variant="outline" className="gap-2">
+                  <Pencil className="h-4 w-4" />تعديل
+                </Button>
+              </Link>
+            )}
             <Link href={`/print/tickets/${id}`} target="_blank">
               <Button variant="outline" className="gap-2"><Printer className="h-4 w-4" />وصل استلام</Button>
             </Link>
@@ -263,6 +300,15 @@ export default function TicketDetailPage() {
                 </Button>
               </Link>
             ) : null}
+            {canDelete && (
+              <Button
+                variant="outline"
+                className="text-red-600 border-red-200 hover:bg-red-50 gap-2"
+                onClick={() => setDeleteConfirm(true)}
+              >
+                <Trash2 className="h-4 w-4" />حذف
+              </Button>
+            )}
           </div>
         }
       />
@@ -545,6 +591,16 @@ export default function TicketDetailPage() {
         title="حذف القطعة"
         description="هل أنت متأكد من حذف هذه القطعة؟ سيتم إعادة الكمية للمخزون."
         variant="danger"
+      />
+
+      <ConfirmDialog
+        open={deleteConfirm}
+        onClose={() => setDeleteConfirm(false)}
+        onConfirm={deleteTicket}
+        title="حذف التذكرة"
+        description={deleteDescription}
+        variant="danger"
+        loading={deleteLoading}
       />
     </div>
   );
