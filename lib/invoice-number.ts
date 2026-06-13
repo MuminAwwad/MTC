@@ -1,27 +1,31 @@
-import { PrismaClient } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
-type TxClient = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
-
-// Counters are per-shop: the ownerId is embedded in the counter row's id so
-// two users can each have their own MTC-2026-0001 without colliding.
-export async function generateInvoiceNumber(tx: TxClient, ownerId: string): Promise<string> {
+/**
+ * Atomically allocate the next sequential number for a per-shop counter.
+ * Counters are keyed by `${ownerId}:${kind}-${year}` so two shops can each
+ * have their own MTC-2026-0001 without colliding, and numbering resets yearly.
+ */
+async function nextSequence(
+  tx: Prisma.TransactionClient,
+  ownerId: string,
+  kind: "invoice" | "ticket"
+): Promise<number> {
   const year = new Date().getFullYear().toString();
-  const counterId = `${ownerId}:invoice-${year}`;
   const counter = await tx.counter.upsert({
-    where: { id: counterId },
+    where: { id: `${ownerId}:${kind}-${year}` },
     update: { value: { increment: 1 } },
-    create: { id: counterId, value: 1 },
+    create: { id: `${ownerId}:${kind}-${year}`, value: 1 },
   });
-  return `MTC-${year}-${counter.value.toString().padStart(4, "0")}`;
+  return counter.value;
 }
 
-export async function generateTicketNumber(tx: TxClient, ownerId: string): Promise<string> {
-  const year = new Date().getFullYear().toString();
-  const counterId = `${ownerId}:ticket-${year}`;
-  const counter = await tx.counter.upsert({
-    where: { id: counterId },
-    update: { value: { increment: 1 } },
-    create: { id: counterId, value: 1 },
-  });
-  return `TKT-${year}-${counter.value.toString().padStart(4, "0")}`;
+const format = (prefix: string, value: number): string =>
+  `${prefix}-${new Date().getFullYear()}-${value.toString().padStart(4, "0")}`;
+
+export async function generateInvoiceNumber(tx: Prisma.TransactionClient, ownerId: string): Promise<string> {
+  return format("MTC", await nextSequence(tx, ownerId, "invoice"));
+}
+
+export async function generateTicketNumber(tx: Prisma.TransactionClient, ownerId: string): Promise<string> {
+  return format("TKT", await nextSequence(tx, ownerId, "ticket"));
 }

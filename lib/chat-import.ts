@@ -2,12 +2,14 @@ import * as XLSX from "xlsx";
 
 // Multi-kind document extractor for the chat assistant. Takes an uploaded
 // file (image/PDF/XLSX), converts it to model-friendly content, and asks
-// Groq to detect WHAT kind of import this is and extract structured data.
+// Gemini to detect WHAT kind of import this is and extract structured data.
 // Commit happens in /api/chat/commit after the user reviews the preview.
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const VISION_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct";
-const TEXT_MODEL = "llama-3.3-70b-versatile";
+// Gemini's OpenAI-compatible endpoint — keeps the OpenAI-style request shape.
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+// gemini-2.5-flash is multimodal — one model for both the vision and text paths.
+const VISION_MODEL = "gemini-2.5-flash";
+const TEXT_MODEL = "gemini-2.5-flash";
 
 export const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -106,29 +108,32 @@ Rules:
 - For products: sellPrice is the price the shop sells to customers; if only one price column is shown and the doc looks like a price list, treat that as sellPrice.
 - If a value is unknown, set it to null. Never invent.`;
 
-interface GroqTextMsg { role: "system" | "user" | "assistant"; content: string }
-interface GroqVisionMsg {
+interface GeminiTextMsg { role: "system" | "user" | "assistant"; content: string }
+interface GeminiVisionMsg {
   role: "user";
   content: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
 }
 
-async function callGroq(
+async function callGemini(
   model: string,
-  messages: Array<GroqTextMsg | GroqVisionMsg>,
+  messages: Array<GeminiTextMsg | GeminiVisionMsg>,
   opts?: { jsonMode?: boolean }
 ): Promise<string> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error("GROQ_API_KEY غير مهيأ");
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY غير مهيأ");
 
   const body: Record<string, unknown> = {
     model,
     messages,
     temperature: 0,
     max_tokens: 4096,
+    // Disable Gemini 2.5 "thinking" so the whole token budget goes to the JSON
+    // output — important for documents with many rows.
+    reasoning_effort: "none",
   };
   if (opts?.jsonMode) body.response_format = { type: "json_object" };
 
-  const res = await fetch(GROQ_URL, {
+  const res = await fetch(GEMINI_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
@@ -142,7 +147,7 @@ async function callGroq(
     } catch {
       /* keep raw */
     }
-    throw new Error(`Groq ${res.status}: ${detail.slice(0, 400)}`);
+    throw new Error(`Gemini ${res.status}: ${detail.slice(0, 400)}`);
   }
   const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
   return data.choices?.[0]?.message?.content ?? "";
@@ -273,7 +278,7 @@ export async function extractFromImage(
   base64: string,
   mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp"
 ): Promise<DraftEnvelope> {
-  const out = await callGroq(VISION_MODEL, [
+  const out = await callGemini(VISION_MODEL, [
     {
       role: "user",
       content: [
@@ -312,7 +317,7 @@ export async function extractFromPdf(buffer: Buffer): Promise<DraftEnvelope> {
       reason: "لم نتمكن من قراءة نص الملف من PDF — قد يكون ممسوحًا ضوئيًا. جرّب رفعه كصورة.",
     };
   }
-  const out = await callGroq(
+  const out = await callGemini(
     TEXT_MODEL,
     [
       { role: "system", content: DETECTION_PROMPT },
@@ -333,7 +338,7 @@ export async function extractFromXlsx(buffer: Buffer): Promise<DraftEnvelope> {
     const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
     return `### Sheet: ${name}\n${csv}`;
   }).join("\n\n");
-  const out = await callGroq(
+  const out = await callGemini(
     TEXT_MODEL,
     [
       { role: "system", content: DETECTION_PROMPT },

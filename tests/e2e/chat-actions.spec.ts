@@ -69,7 +69,7 @@ test.describe("Assistant action commit (/api/chat/action)", () => {
     }
   });
 
-  test("delete_record hard-deletes a customer", async ({ request }) => {
+  test("delete_record removes a customer", async ({ request }) => {
     test.setTimeout(60_000);
     const name = `${tag("ACTDEL")}-cust`;
     const c = await request.post("/api/customers", { data: { name, phone: uniquePhone() } });
@@ -82,6 +82,53 @@ test.describe("Assistant action commit (/api/chat/action)", () => {
 
     const list = await (await request.get(`/api/customers?search=${encodeURIComponent(name)}`)).json();
     const stillThere = (list.data ?? []).find((x: { id: string }) => x.id === id);
-    expect(stillThere, "customer should be gone after hard delete").toBeFalsy();
+    expect(stillThere, "customer should be gone after delete").toBeFalsy();
+  });
+
+  test("delete_record on an issued invoice reverses stock and voids its debt", async ({ request }) => {
+    test.setTimeout(120_000);
+    const label = tag("ACTINVDEL");
+    let customerId = "";
+    let productId = "";
+    try {
+      const c = await request.post("/api/customers", { data: { name: `${label}-cust`, phone: uniquePhone() } });
+      customerId = (await c.json()).id;
+      const p = await request.post("/api/products", {
+        data: { name: `${label}-prod`, sku: label, sellPrice: 50, costPrice: 20, stockQty: 10 },
+      });
+      expect(p.status(), await p.text()).toBe(201);
+      productId = (await p.json()).id;
+
+      // Issue an invoice for 2 units, partly paid → stock 10→8 and a linked debt.
+      const inv = await request.post("/api/invoices", {
+        data: {
+          customerId,
+          items: [{ productId, name: `${label}-prod`, qty: 2, unitPrice: 50 }],
+          status: "ISSUED",
+          paidAmount: 40,
+        },
+      });
+      expect(inv.status(), await inv.text()).toBe(201);
+      const invoiceId = (await inv.json()).id;
+
+      const afterIssue = await (await request.get(`/api/products/${productId}`)).json();
+      expect(afterIssue.stockQty).toBe(8);
+      const debtId = (await (await request.get(`/api/invoices/${invoiceId}`)).json()).debts[0].id;
+
+      // Delete it through the assistant action — must reverse, not hard-delete.
+      const del = await request.post("/api/chat/action", {
+        data: { action: { kind: "delete_record", summary: "حذف", payload: { entity: "invoice", id: invoiceId } } },
+      });
+      expect(del.status(), await del.text()).toBe(200);
+
+      // Invoice gone, stock back to 10, linked debt voided (404).
+      expect((await request.get(`/api/invoices/${invoiceId}`)).status()).toBe(404);
+      const afterDelete = await (await request.get(`/api/products/${productId}`)).json();
+      expect(afterDelete.stockQty).toBe(10);
+      expect((await request.get(`/api/debts/${debtId}`)).status()).toBe(404);
+    } finally {
+      if (productId) await request.delete(`/api/products/${productId}`);
+      if (customerId) await cleanupCustomer(request, customerId);
+    }
   });
 });

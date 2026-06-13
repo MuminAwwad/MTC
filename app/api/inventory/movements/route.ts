@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
 

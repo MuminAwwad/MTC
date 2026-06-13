@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
-import { decrementStockOrFail, InsufficientStockError } from "@/lib/stock";
+import { issueStockFromInventory, returnStockToInventory, InsufficientStockError } from "@/lib/stock";
 import { requireUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -69,17 +69,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
 
       if (productId) {
-        await decrementStockOrFail(tx, productId, qty);
-        await tx.stockMovement.create({
-          data: {
-            ownerId: ctx.dbUser.id,
-            productId,
-            createdById: ctx.dbUser.id,
-            type: "OUT",
-            qty,
-            note: `قطعة لتذكرة ${ticket.ticketNumber}`,
-            reference: ticket.ticketNumber,
-          },
+        await issueStockFromInventory(tx, {
+          ownerId: ctx.dbUser.id,
+          userId: ctx.dbUser.id,
+          productId,
+          qty,
+          note: `قطعة لتذكرة ${ticket.ticketNumber}`,
+          reference: ticket.ticketNumber,
         });
       }
 
@@ -116,20 +112,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await prisma.$transaction(async (tx) => {
       await tx.ticketPart.delete({ where: { id: partId } });
       if (part.productId) {
-        await tx.product.update({
-          where: { id: part.productId },
-          data: { stockQty: { increment: part.qty } },
-        });
-        await tx.stockMovement.create({
-          data: {
-            ownerId: ctx.dbUser.id,
-            productId: part.productId,
-            createdById: ctx.dbUser.id,
-            type: "IN",
-            qty: part.qty,
-            note: `إلغاء قطعة من تذكرة`,
-            reference: id,
-          },
+        await returnStockToInventory(tx, {
+          ownerId: ctx.dbUser.id,
+          userId: ctx.dbUser.id,
+          productId: part.productId,
+          qty: part.qty,
+          note: `إلغاء قطعة من تذكرة`,
+          reference: id,
         });
       }
     });

@@ -260,9 +260,9 @@ const TOOLS: ToolDefinition[] = [
     parameters: {
       type: "object",
       properties: {
-        // Numeric params accept either int or string — llama models on Groq
-        // sometimes quote integers and Groq's strict validator rejects the
-        // call. Server executors coerce via Number(...).
+        // Numeric params accept either int or string — models sometimes quote
+        // integers and a strict validator would reject the call. Server
+        // executors coerce via Number(...).
         limit: {
           type: "string",
           description: "Max rows (default 10, max 25).",

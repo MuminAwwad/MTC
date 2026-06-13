@@ -1,6 +1,9 @@
 import { prisma } from "./prisma";
 import { decrementStockOrFail, InsufficientStockError } from "./stock";
 import { generateInvoiceNumber, generateTicketNumber } from "./invoice-number";
+import { softDeleteInvoice } from "./services/invoices";
+import { softDeleteTicket } from "./services/tickets";
+import { softDeleteDebt } from "./services/debts";
 import type {
   Currency,
   DeviceType,
@@ -937,7 +940,7 @@ const ACTIONS: ActionToolDef[] = [
   {
     name: "delete_record",
     description:
-      "Permanently delete a record. entity is one of: customer, supplier, product, invoice, expense, debt, ticket. This is a hard delete and cannot be undone; it will fail if other records depend on it (e.g. a customer that still has invoices). Resolve the id with the matching find_/get_ tool first.",
+      "Delete a record. entity is one of: customer, supplier, product, invoice, expense, debt, ticket. Deleting an invoice returns its stock to inventory and voids its linked debts; deleting a ticket returns its parts to stock. A debt backed by an invoice cannot be deleted directly — delete its invoice instead. Resolve the id with the matching find_/get_ tool first.",
     parameters: {
       type: "object",
       properties: {
@@ -965,35 +968,53 @@ const ACTIONS: ActionToolDef[] = [
         case "ticket": name = (await prisma.maintenanceTicket.findFirst({ where: { id, ownerId }, select: { ticketNumber: true } }))?.ticketNumber ?? ""; break;
       }
       if (!name) return { ok: false, error: `${labels[entity]} غير موجود` };
+      const sideEffect =
+        entity === "invoice"
+          ? " (سيُرجَع المخزون وتُلغى الديون المرتبطة)"
+          : entity === "ticket"
+          ? " (ستُرجَع قطع الغيار للمخزون)"
+          : "";
       return {
         ok: true,
         action: {
           kind: "delete_record",
-          summary: `حذف نهائي لـ${labels[entity]}: ${name}`,
-          warn: "حذف نهائي لا يمكن التراجع عنه.",
+          summary: `حذف ${labels[entity]}: ${name}${sideEffect}`,
+          warn: "لا يمكن التراجع عن الحذف.",
           payload: { entity, id },
         },
       };
     },
-    commit: async (ownerId, _userId, p) => {
+    commit: async (ownerId, userId, p) => {
       const entity = p.entity as string;
       const id = p.id as string;
+      // Route every delete through the same soft-delete logic the REST API
+      // uses, so the assistant reverses stock and voids linked debts instead
+      // of hard-deleting and leaving the books inconsistent.
+      const softDelete = (model: { updateMany: (a: { where: object; data: object }) => Promise<{ count: number }> }, data: object = { isDeleted: true }) =>
+        model.updateMany({ where: { id, ownerId, isDeleted: false }, data }).then((r) => (r.count > 0 ? "ok" : "not_found"));
       try {
-        let count = 0;
-        switch (entity) {
-          case "customer": count = (await prisma.customer.deleteMany({ where: { id, ownerId } })).count; break;
-          case "supplier": count = (await prisma.supplier.deleteMany({ where: { id, ownerId } })).count; break;
-          case "product": count = (await prisma.product.deleteMany({ where: { id, ownerId } })).count; break;
-          case "invoice": count = (await prisma.invoice.deleteMany({ where: { id, ownerId } })).count; break;
-          case "expense": count = (await prisma.expense.deleteMany({ where: { id, ownerId } })).count; break;
-          case "debt": count = (await prisma.debt.deleteMany({ where: { id, ownerId } })).count; break;
-          case "ticket": count = (await prisma.maintenanceTicket.deleteMany({ where: { id, ownerId } })).count; break;
-          default: return { error: "نوع السجل غير مدعوم" };
-        }
-        if (count === 0) return { error: "السجل غير موجود" };
-        return { summary: "تم الحذف نهائيًا." };
-      } catch {
-        return { error: "تعذّر الحذف نهائيًا — قد توجد سجلات مرتبطة بهذا السجل. جرّب الإلغاء بدلًا من الحذف." };
+        const result = await prisma.$transaction(async (tx) => {
+          switch (entity) {
+            case "customer": return softDelete(tx.customer);
+            case "supplier": return softDelete(tx.supplier);
+            case "product": return softDelete(tx.product, { isDeleted: true, isActive: false });
+            case "expense": return softDelete(tx.expense);
+            case "invoice": return (await softDeleteInvoice(tx, ownerId, userId, id)) ? "ok" : "not_found";
+            case "ticket": return (await softDeleteTicket(tx, ownerId, userId, id)) ? "ok" : "not_found";
+            case "debt": {
+              const r = await softDeleteDebt(tx, ownerId, id);
+              return r === "deleted" ? "ok" : r; // "not_found" | "linked"
+            }
+            default: return "unsupported";
+          }
+        });
+        if (result === "unsupported") return { error: "نوع السجل غير مدعوم" };
+        if (result === "not_found") return { error: "السجل غير موجود" };
+        if (result === "linked") return { error: "هذا الدين مرتبط بفاتورة. احذف الفاتورة بدلًا من ذلك." };
+        return { summary: "تم الحذف." };
+      } catch (e) {
+        console.error("chat delete_record", e);
+        return { error: "تعذّر الحذف. حاول مرة أخرى." };
       }
     },
   },
