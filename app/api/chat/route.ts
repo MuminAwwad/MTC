@@ -9,11 +9,16 @@ import {
   type StagedAction,
 } from "@/lib/chat-actions";
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "llama-3.3-70b-versatile";
+// Gemini's OpenAI-compatible endpoint — lets us keep the OpenAI-style messages,
+// tool_calls and JSON shape unchanged. We use gemini-2.5-flash with
+// reasoning_effort:"none" (see payload): that disables its "thinking" tokens, so
+// the small MAX_TOKENS budget below maps straight to the visible answer/tool call
+// instead of being eaten by hidden reasoning.
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const MODEL = "gemini-2.5-flash";
 const MAX_TOOL_HOPS = 5;
-// Smaller history window keeps each request well under Groq's per-minute token
-// budget (free tier is 12k TPM and the whole prompt is re-sent every hop).
+// Recent-history window keeps each request small (the whole prompt is re-sent
+// every hop). Gemini's free tier is far more generous than Groq's was.
 const MAX_HISTORY = 10;
 const MAX_TOKENS = 768;
 
@@ -58,8 +63,8 @@ export async function POST(req: NextRequest) {
   const ctx = await requireUser();
   if (ctx instanceof NextResponse) return ctx;
 
-  if (!process.env.GROQ_API_KEY) {
-    return ok({ error: "المساعد الذكي غير مهيأ (GROQ_API_KEY مفقود)" }, { status: 500 });
+  if (!process.env.GEMINI_API_KEY) {
+    return ok({ error: "المساعد الذكي غير مهيأ (GEMINI_API_KEY مفقود)" }, { status: 500 });
   }
 
   try {
@@ -84,7 +89,7 @@ export async function POST(req: NextRequest) {
       : getToolSchemas();
 
     const headers = {
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      Authorization: `Bearer ${process.env.GEMINI_API_KEY}`,
       "Content-Type": "application/json",
     };
 
@@ -96,9 +101,10 @@ export async function POST(req: NextRequest) {
         tool_choice: "auto",
         temperature: 0.2,
         max_tokens: MAX_TOKENS,
+        reasoning_effort: "none", // disable Gemini 2.5 "thinking" — keeps replies fast and within MAX_TOKENS
       });
 
-      let res = await fetch(GROQ_URL, { method: "POST", headers, body: payload });
+      let res = await fetch(GEMINI_URL, { method: "POST", headers, body: payload });
 
       // On a rate-limit, retry once automatically if the cooldown is short;
       // otherwise tell the user how long to wait.
@@ -106,7 +112,7 @@ export async function POST(req: NextRequest) {
         const retryAfter = Number(res.headers.get("retry-after"));
         if (Number.isFinite(retryAfter) && retryAfter > 0 && retryAfter <= 6) {
           await sleep((retryAfter + 0.3) * 1000);
-          res = await fetch(GROQ_URL, { method: "POST", headers, body: payload });
+          res = await fetch(GEMINI_URL, { method: "POST", headers, body: payload });
         }
         if (res.status === 429) {
           const ra = Number(res.headers.get("retry-after"));
@@ -120,7 +126,7 @@ export async function POST(req: NextRequest) {
 
       if (!res.ok) {
         const errText = await res.text();
-        console.error("Groq chat error:", res.status, errText);
+        console.error("Gemini chat error:", res.status, errText);
         // Surface the real upstream message — it's almost always a tool-schema
         // mismatch or rate limit, both of which are useful to see in the UI.
         let detail = errText;

@@ -44,9 +44,13 @@ Rules:
 - Sanity check: sum(qty * unitCost) over your items should be close to the printed invoice subtotal/total. If your numbers are an order of magnitude off, re-check whether you mistook a line total for unitCost or vice versa.
 - Respond with the JSON object only — no markdown fences, no commentary, no reasoning blocks before/after.`;
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const VISION_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct";
-const TEXT_MODEL = "llama-3.3-70b-versatile";
+// Gemini's OpenAI-compatible endpoint — keeps the OpenAI-style request/response
+// shape, so the messages, image_url blocks and JSON mode below are unchanged.
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+// gemini-2.5-flash is a single multimodal model — it handles both the image
+// (vision) and text/PDF/xlsx paths, so both constants point at it.
+const VISION_MODEL = "gemini-2.5-flash";
+const TEXT_MODEL = "gemini-2.5-flash";
 
 function extractJson(text: string): unknown {
   const trimmed = text.trim();
@@ -58,7 +62,7 @@ function extractJson(text: string): unknown {
   return JSON.parse(stripped.slice(start, end + 1));
 }
 
-type GroqMessage =
+type GeminiMessage =
   | { role: "system" | "user" | "assistant"; content: string }
   | {
       role: "user";
@@ -68,10 +72,10 @@ type GroqMessage =
       >;
     };
 
-async function callGroq(model: string, messages: GroqMessage[], opts?: { jsonMode?: boolean }): Promise<ParsedInvoice> {
-  const apiKey = process.env.GROQ_API_KEY;
+async function callGemini(model: string, messages: GeminiMessage[], opts?: { jsonMode?: boolean }): Promise<ParsedInvoice> {
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("لم يتم ضبط GROQ_API_KEY في إعدادات البيئة");
+    throw new Error("لم يتم ضبط GEMINI_API_KEY في إعدادات البيئة");
   }
 
   const body: Record<string, unknown> = {
@@ -79,10 +83,13 @@ async function callGroq(model: string, messages: GroqMessage[], opts?: { jsonMod
     messages,
     temperature: 0,
     max_tokens: 4096,
+    // Disable Gemini 2.5 "thinking" so the whole token budget goes to the JSON
+    // output — important for invoices with many line items.
+    reasoning_effort: "none",
   };
   if (opts?.jsonMode) body.response_format = { type: "json_object" };
 
-  const res = await fetch(GROQ_URL, {
+  const res = await fetch(GEMINI_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -98,7 +105,7 @@ async function callGroq(model: string, messages: GroqMessage[], opts?: { jsonMod
       const json = JSON.parse(errBody);
       detail = json.error?.message ?? errBody;
     } catch { /* keep raw */ }
-    throw new Error(`Groq ${res.status}: ${detail.slice(0, 400)}`);
+    throw new Error(`Gemini ${res.status}: ${detail.slice(0, 400)}`);
   }
 
   const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
@@ -115,9 +122,9 @@ export async function parseInvoiceFromImage(
   base64: string,
   mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp"
 ): Promise<ParsedInvoice> {
-  // Vision models on Groq don't support a separate `system` role; bake the
-  // instructions into the user turn instead.
-  return callGroq(VISION_MODEL, [
+  // Bake the instructions into the user turn alongside the image (works
+  // reliably for the multimodal vision path).
+  return callGemini(VISION_MODEL, [
     {
       role: "user",
       content: [
@@ -154,7 +161,7 @@ export async function parseInvoiceFromPdf(buffer: Buffer): Promise<ParsedInvoice
   });
   const merged = pages.join("\n\n");
   if (!merged.trim()) throw new Error("لم نتمكن من قراءة نص الفاتورة من ملف PDF (قد يكون ممسوحًا ضوئيًا — جرّب رفعه كصورة)");
-  const parsed = await callGroq(
+  const parsed = await callGemini(
     TEXT_MODEL,
     [
       { role: "system", content: SYSTEM_PROMPT },
@@ -176,7 +183,7 @@ export async function parseInvoiceFromXlsx(buffer: Buffer): Promise<ParsedInvoic
     const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
     return `### Sheet: ${name}\n${csv}`;
   }).join("\n\n");
-  const parsed = await callGroq(
+  const parsed = await callGemini(
     TEXT_MODEL,
     [
       { role: "system", content: SYSTEM_PROMPT },
