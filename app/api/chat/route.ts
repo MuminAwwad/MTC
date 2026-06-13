@@ -22,27 +22,25 @@ const MAX_TOOL_HOPS = 5;
 const MAX_HISTORY = 10;
 const MAX_TOKENS = 768;
 
-const BASE_PROMPT = `أنت مساعد ذكي لمحل MTC Electronics في فلسطين. تجيب عن أسئلة صاحب المحل عن مبيعاته وزبائنه ومخزونه وديونه وتذاكر الصيانة.
+// Single system prompt — the assistant always has BOTH read and write tools, so
+// it must always know it can act. (Previously the write tools were gated behind
+// an Arabic-keyword regex to save Groq tokens; that regex missed spellings like
+// "إضافة" and made the model wrongly claim it couldn't change data. Gemini's
+// budget makes the gating unnecessary, so it's gone.)
+const SYSTEM_PROMPT = `أنت مساعد ذكي لمحل MTC Electronics في فلسطين، تساعد صاحب المحل في إدارة مبيعاته وزبائنه ومخزونه وديونه وتذاكر الصيانة.
 
-قواعد:
-- استخدم أدوات القراءة لاسترجاع البيانات. لا تخمّن أرقاماً أبداً.
+لديك قدرتان:
+١) القراءة: استرجاع البيانات عبر أدوات القراءة. لا تخمّن أرقاماً أبداً.
+٢) التنفيذ: إجراء عمليات فعلية (إضافة/تعديل/حذف) نيابةً عن صاحب المحل عبر أدوات العمليات (create_customer, create_invoice, record_debt_payment, adjust_stock, update_ticket_status, delete_record ...).
+
+قواعد مهمة:
+- أنت لست مجرد نموذج لغوي — لديك أدوات فعلية تعدّل البيانات. لا تقل أبداً إنك لا تستطيع التنفيذ؛ بل استدعِ الأداة المناسبة. وإذا أعطاك المستخدم فاتورة شراء فبإمكانك إدخال أصنافها.
+- حدّد المعرّفات (id) أولاً عبر أدوات البحث (find_customer / find_product / find_supplier / find_ticket / get_customer_debt). لا تخترع id.
+- استدعاء أداة العملية لا ينفّذها فوراً، بل يعرض ملخصاً لصاحب المحل ليؤكده بنفسه. لذلك لا تقل "تم" بصيغة الماضي؛ بل اذكر باختصار ما ستفعله.
+- إذا نقصت معلومة ضرورية لإتمام العملية اسأل عنها أولاً. ونبّه باختصار قبل أي حذف نهائي.
 - الردود مختصرة وبالعربية الفصحى البسيطة، إلا إذا سأل المستخدم بالإنجليزية.
 - صيغة العملة: ₪X.XX. استعمل bullet points مختصرة للقوائم.
 - إذا سألك المستخدم سؤالاً لا يخص أعمال المحل اعتذر بأدب.`;
-
-// Appended only when the user's message looks like an action request — keeps
-// read-only turns lean.
-const ACTION_PROMPT = `يمكنك أيضاً تنفيذ عمليات (إضافة/تعديل/حذف) نيابةً عن المستخدم:
-- استدعِ أداة العملية المناسبة (create_customer, create_invoice, record_debt_payment, adjust_stock, update_ticket_status, delete_record ...).
-- حدّد المعرّفات (id) أولاً عبر أدوات البحث (find_customer / find_product / find_supplier / find_ticket / get_customer_debt). لا تخترع id.
-- استدعاء الأداة لا ينفّذها فوراً بل يعرضها للمستخدم ليؤكدها. لا تقل "تم"؛ بل اذكر باختصار ما ستفعله.
-- إذا نقصت معلومة ضرورية اسأل عنها أولاً. ونبّه باختصار قبل أي حذف نهائي.`;
-
-// Broad heuristic: does the latest user message ask for a change? When false we
-// skip the action tool schemas + action prompt entirely (big token saving for
-// the common "just a question" case).
-const ACTION_INTENT =
-  /(أض|اضف|ضيف|سجّل|سجل|أنشئ|انشئ|إنشاء|انشاء|اعمل|سوي|احذف|امسح|الغ|ألغ|إلغاء|الغاء|عدّل|عدل|غيّر|غير|حدّث|حدث|ادفع|سدّد|سدد|دفعة|أصدر|اصدر|زد|انقص|اصرف|افتح|create|add|new|make|delete|remove|update|edit|change|record|pay|payment|cancel|adjust|issue|register)/i;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -74,19 +72,14 @@ export async function POST(req: NextRequest) {
     // Cap to recent history to keep the prompt small and avoid runaway costs.
     const recent = incoming.slice(-MAX_HISTORY);
 
-    // Only enable the (token-heavy) write tools when the latest user message
-    // looks like an action request.
-    const lastUser = [...recent].reverse().find((m) => m.role === "user")?.content ?? "";
-    const wantsAction = ACTION_INTENT.test(lastUser);
-
     const conversation: ChatMessage[] = [
-      { role: "system", content: wantsAction ? `${BASE_PROMPT}\n\n${ACTION_PROMPT}` : BASE_PROMPT },
+      { role: "system", content: SYSTEM_PROMPT },
       ...recent,
     ];
 
-    const tools = wantsAction
-      ? [...getToolSchemas(), ...getActionToolSchemas()]
-      : getToolSchemas();
+    // Always expose both read and write tools so the assistant can act on any
+    // request without a brittle keyword check deciding for it.
+    const tools = [...getToolSchemas(), ...getActionToolSchemas()];
 
     const headers = {
       Authorization: `Bearer ${process.env.GEMINI_API_KEY}`,
