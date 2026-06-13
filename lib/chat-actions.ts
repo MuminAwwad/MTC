@@ -596,6 +596,141 @@ const ACTIONS: ActionToolDef[] = [
     },
   },
 
+  // ── purchases (supplier invoices) ─────────────────────────────────────────────
+  {
+    name: "create_purchase_invoice",
+    description:
+      "Record a SUPPLIER PURCHASE invoice — goods the shop BOUGHT from a vendor. For each item it creates the product (or restocks it if the SKU already exists) and logs an IN stock movement, then opens a payable (money the shop now owes the supplier). Use THIS, not create_invoice, whenever the user gives a purchase/buying invoice from a supplier or says to add goods/stock from an invoice. items is an array of { name, qty, unitCost, sku? } where unitCost is what the shop paid per single piece. supplierName, supplierPhone, supplierCompany, invoiceNumber, invoiceDate (YYYY-MM-DD) and currency (ILS default) are optional.",
+    parameters: {
+      type: "object",
+      properties: {
+        supplierName: { type: "string", description: "Supplier/vendor name (optional)." },
+        supplierPhone: { type: "string", description: "Supplier phone — used to match an existing supplier." },
+        supplierCompany: { type: "string" },
+        items: {
+          type: "array",
+          description: "Purchased line items.",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              qty: { type: "string", description: "Quantity bought (positive integer)." },
+              unitCost: { type: "string", description: "Cost the shop paid per single piece." },
+              sku: { type: "string", description: "SKU/code to match an existing product (optional)." },
+            },
+            required: ["name", "qty", "unitCost"],
+          },
+        },
+        invoiceNumber: { type: "string" },
+        invoiceDate: { type: "string", description: "YYYY-MM-DD" },
+        currency: { type: "string", description: "ILS | USD | JOD (default ILS)." },
+      },
+      required: ["items"],
+    },
+    preview: async (_ownerId, args) => {
+      const rawItems = Array.isArray(args.items) ? (args.items as Record<string, unknown>[]) : [];
+      if (rawItems.length === 0) return { ok: false, error: "يجب إضافة صنف واحد على الأقل" };
+      const items: { name: string; qty: number; unitCost: number; sku: string | null }[] = [];
+      for (const it of rawItems) {
+        const name = str(it.name);
+        const qty = intOf(it.qty);
+        const unitCost = num(it.unitCost);
+        if (!name) return { ok: false, error: "اسم الصنف مطلوب لكل سطر" };
+        if (!Number.isFinite(qty) || qty <= 0) return { ok: false, error: `كمية غير صالحة للصنف "${name}"` };
+        if (!Number.isFinite(unitCost) || unitCost < 0) return { ok: false, error: `تكلفة غير صالحة للصنف "${name}"` };
+        items.push({ name, qty, unitCost, sku: optStr(it.sku) });
+      }
+      const currency = VALID_CURRENCIES.includes(str(args.currency).toUpperCase()) ? str(args.currency).toUpperCase() : "ILS";
+      const payableTotal = items.reduce((s, i) => s + i.qty * i.unitCost, 0);
+      const supplierName = optStr(args.supplierName);
+      const preview = items.slice(0, 3).map((i) => `• ${i.name} — ${i.qty} × ${fmt(i.unitCost, currency)}`);
+      if (items.length > 3) preview.push(`• … و${items.length - 3} صنف آخر`);
+      return {
+        ok: true,
+        action: {
+          kind: "create_purchase_invoice",
+          summary:
+            `إدخال فاتورة شراء من المورد "${supplierName ?? "غير معروف"}" — ${items.length} صنف، ` +
+            `الإجمالي ${fmt(payableTotal, currency)}. ستُضاف الأصناف للمخزون وتُفتح فاتورة مستحقة للمورد بهذه القيمة.\n` +
+            preview.join("\n"),
+          payload: {
+            supplier: { name: supplierName, phone: optStr(args.supplierPhone), company: optStr(args.supplierCompany) },
+            items,
+            invoiceNumber: optStr(args.invoiceNumber),
+            invoiceDate: optStr(args.invoiceDate),
+            currency,
+            payableTotal,
+          },
+        },
+      };
+    },
+    commit: async (ownerId, userId, p) => {
+      const supplier = p.supplier as { name: string | null; phone: string | null; company: string | null };
+      const items = p.items as { name: string; qty: number; unitCost: number; sku: string | null }[];
+      if (items.length === 0) return { error: "لا توجد أصناف للإدخال" };
+      const currency = p.currency as Currency;
+      const invoiceNumber = (p.invoiceNumber as string | null) ?? null;
+      const invoiceDate = (p.invoiceDate as string | null) ?? null;
+      const reference = invoiceNumber ? `استيراد ${invoiceNumber}` : "فاتورة شراء (المساعد الذكي)";
+      const noteBase = invoiceDate ? `${reference} (${invoiceDate})` : reference;
+
+      const result = await prisma.$transaction(
+        async (tx) => {
+          // Supplier — match by phone within the shop, else create.
+          let supplierId: string | null = null;
+          const phone = supplier.phone?.trim() || null;
+          if (phone) {
+            const found = await tx.supplier.findFirst({ where: { ownerId, phone, isDeleted: false }, select: { id: true } });
+            if (found) supplierId = found.id;
+          }
+          if (!supplierId) {
+            const made = await tx.supplier.create({
+              data: { ownerId, name: supplier.name ?? "مورد غير معروف", phone, company: supplier.company },
+              select: { id: true },
+            });
+            supplierId = made.id;
+          }
+
+          let created = 0;
+          let restocked = 0;
+          let payableTotal = 0;
+          for (const item of items) {
+            let productId: string | null = null;
+            if (item.sku) {
+              const found = await tx.product.findFirst({ where: { ownerId, sku: item.sku, isDeleted: false }, select: { id: true } });
+              if (found) productId = found.id;
+            }
+            if (!productId) {
+              const made = await tx.product.create({
+                data: { ownerId, name: item.name, sku: item.sku, costPrice: item.unitCost, sellPrice: item.unitCost, stockQty: item.qty, supplierId },
+                select: { id: true },
+              });
+              productId = made.id;
+              created++;
+            } else {
+              await tx.product.update({ where: { id: productId }, data: { stockQty: { increment: item.qty }, costPrice: item.unitCost } });
+              restocked++;
+            }
+            await tx.stockMovement.create({
+              data: { ownerId, productId, createdById: userId, type: "IN", qty: item.qty, note: noteBase, reference: invoiceNumber ?? undefined },
+            });
+            payableTotal += item.qty * item.unitCost;
+          }
+
+          await tx.payable.create({
+            data: { ownerId, supplierId, amount: payableTotal, currency, reason: noteBase, status: "PENDING" },
+          });
+          return { created, restocked, payableTotal };
+        },
+        { timeout: 60_000, maxWait: 10_000 }
+      );
+
+      return {
+        summary: `تمت إضافة ${result.created} منتج جديد، وتجديد مخزون ${result.restocked} منتج، وفتح فاتورة مستحقة للمورد بقيمة ${fmt(result.payableTotal, currency)}.`,
+      };
+    },
+  },
+
   // ── debts ───────────────────────────────────────────────────────────────────
   {
     name: "create_debt",
