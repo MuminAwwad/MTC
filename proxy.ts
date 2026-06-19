@@ -1,13 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { authCookieOptions, REMEMBER_COOKIE } from "./lib/supabase/cookie-options";
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
+
+  const remember = request.cookies.get(REMEMBER_COOKIE)?.value === "1";
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: authCookieOptions(remember),
       cookies: {
         getAll() {
           return request.cookies.getAll();

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { writeRememberCookie } from "@/lib/supabase/cookie-options";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/shared/FormField";
@@ -15,8 +16,18 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Shown when the user was redirected here by the inactivity auto-logout.
+  // useSyncExternalStore keeps this SSR-safe: the server renders nothing and the
+  // client reads the URL after hydration without a mismatch.
+  const idleNotice = useSyncExternalStore(
+    () => () => {},
+    () => new URLSearchParams(window.location.search).get("reason") === "idle",
+    () => false
+  );
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +40,9 @@ export default function LoginPage() {
     setError("");
 
     try {
+      // Persist the choice before sign-in so the auth cookies Supabase writes
+      // inherit the right lifetime (persistent vs. session cookie).
+      writeRememberCookie(remember);
       const supabase = createClient();
       const { error: authError } = await supabase.auth.signInWithPassword({
         email,
@@ -111,11 +125,26 @@ export default function LoginPage() {
               </div>
             </FormField>
 
-            <div className="text-left">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-xs text-[#64748b] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="h-4 w-4 rounded border-[#cbd5e1] accent-[#104e98] cursor-pointer"
+                />
+                تذكرني
+              </label>
               <Link href="/forgot-password" className="text-xs text-[#64748b] hover:text-[#104e98]">
                 نسيت كلمة المرور؟
               </Link>
             </div>
+
+            {idleNotice && !error && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700">
+                تم تسجيل خروجك تلقائيًا بسبب عدم النشاط. يرجى تسجيل الدخول مجددًا
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">

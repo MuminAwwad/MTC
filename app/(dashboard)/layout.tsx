@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { NavigationProgress } from "@/components/layout/NavigationProgress";
 import { ToastProvider } from "@/components/shared/Toast";
+import { IdleTimeout } from "@/components/shared/IdleTimeout";
 
 export default function DashboardLayout({
   children,
@@ -15,6 +16,7 @@ export default function DashboardLayout({
 
   return (
     <ToastProvider>
+      <IdleTimeout />
       <NavigationProgress />
       <div className="flex h-screen overflow-hidden bg-[#f8fafc]">
         <Sidebar
