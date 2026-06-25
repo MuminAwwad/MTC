@@ -296,6 +296,10 @@ model InvoiceItem {
   name      String
   qty       Int
   unitPrice Decimal @db.Decimal(10, 2)
+  // Purchase price (cost) at the time of sale, captured so each line can
+  // track margin (unitPrice − costPrice). Nullable: older items and
+  // labor lines have no recorded cost.
+  costPrice Decimal? @db.Decimal(10, 2)
   discount  Decimal @db.Decimal(10, 2) @default(0)
   total     Decimal @db.Decimal(10, 2)
 

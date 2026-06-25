@@ -34,13 +34,19 @@ interface LineItem {
   name: string;
   qty: number;
   unitPrice: number;
+  // Purchase price (cost). Pre-filled from the catalog for stored products;
+  // typed in by hand for manual items so we can track margin.
+  costPrice: number;
   discount: number;
   source: ItemSource;
+  // Manual items only: when on, the API also creates a catalog product so
+  // the item is searchable next time with its cost + sell price.
+  saveToInventory?: boolean;
 }
 
 let itemCounter = 0;
 function newItem(source: ItemSource = "SALE"): LineItem {
-  return { id: `item-${++itemCounter}`, productId: "", name: "", qty: 1, unitPrice: 0, discount: 0, source };
+  return { id: `item-${++itemCounter}`, productId: "", name: "", qty: 1, unitPrice: 0, costPrice: 0, discount: 0, source };
 }
 
 function NewInvoiceForm() {
@@ -90,6 +96,7 @@ function NewInvoiceForm() {
       name: p.name,
       qty: p.qty,
       unitPrice: Number(p.unitCost),
+      costPrice: Number(p.unitCost),
       discount: 0,
       source: "TICKET_PART" as const,
     }));
@@ -100,6 +107,7 @@ function NewInvoiceForm() {
         name: `أجور صيانة (${t.ticketNumber})`,
         qty: 1,
         unitPrice: laborCost,
+        costPrice: 0,
         discount: 0,
         source: "TICKET_LABOR" as const,
       });
@@ -149,7 +157,7 @@ function NewInvoiceForm() {
     return () => { cancelled = true; };
   }, [customerId]);
 
-  const updateItem = useCallback((id: string, field: keyof LineItem, value: string | number) => {
+  const updateItem = useCallback((id: string, field: keyof LineItem, value: string | number | boolean) => {
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
@@ -159,17 +167,17 @@ function NewInvoiceForm() {
     setItems((prev) => (prev.length > 1 ? prev.filter((i) => i.id !== id) : prev));
   }, []);
 
-  const addProductLine = useCallback((product: { id: string; name: string; sellPrice: number }) => {
+  const addProductLine = useCallback((product: { id: string; name: string; sellPrice: number; costPrice: number }) => {
     setItems((prev) => {
       const empty = prev.find((i) => i.source === "SALE" && !i.name && i.unitPrice === 0);
       if (empty) {
         return prev.map((i) =>
           i.id === empty.id
-            ? { ...i, productId: product.id, name: product.name, unitPrice: Number(product.sellPrice) }
+            ? { ...i, productId: product.id, name: product.name, unitPrice: Number(product.sellPrice), costPrice: Number(product.costPrice) }
             : i
         );
       }
-      return [...prev, { id: `item-${++itemCounter}`, productId: product.id, name: product.name, qty: 1, unitPrice: Number(product.sellPrice), discount: 0, source: "SALE" as const }];
+      return [...prev, { id: `item-${++itemCounter}`, productId: product.id, name: product.name, qty: 1, unitPrice: Number(product.sellPrice), costPrice: Number(product.costPrice), discount: 0, source: "SALE" as const }];
     });
   }, []);
 
@@ -182,6 +190,10 @@ function NewInvoiceForm() {
   const ticketItems = items.filter((i) => i.source !== "SALE");
   const saleSubtotal = saleItems.reduce((s, i) => s + i.qty * i.unitPrice - i.discount, 0);
   const ticketSubtotal = ticketItems.reduce((s, i) => s + i.qty * i.unitPrice - i.discount, 0);
+  // Estimated gross profit from sale lines that have a recorded purchase price.
+  const saleCost = saleItems.reduce((s, i) => s + i.qty * i.costPrice, 0);
+  const estimatedProfit = saleSubtotal - saleCost;
+  const hasCostData = saleItems.some((i) => i.costPrice > 0);
 
   const subtotal = items.reduce((sum, i) => sum + i.qty * i.unitPrice - i.discount, 0);
   const discAmt = discountPercent > 0 ? subtotal * (discountPercent / 100) : discountAmount;
@@ -229,8 +241,11 @@ function NewInvoiceForm() {
             name: i.name,
             qty: i.qty,
             unitPrice: i.unitPrice,
+            costPrice: i.costPrice,
             discount: i.discount,
             source: i.source,
+            // Only manual (no productId) sale lines can be added to the catalog.
+            saveToInventory: i.source === "SALE" && !i.productId ? !!i.saveToInventory : undefined,
           })),
           discountAmount,
           discountPercent,
@@ -341,10 +356,11 @@ function NewInvoiceForm() {
       {/* Sale items */}
       <SectionCard title={attachedTicket ? `أصناف البيع · ₪${saleSubtotal.toFixed(2)}` : "الأصناف"}>
         <div className="space-y-3">
-          <div className="hidden md:grid grid-cols-[2fr_80px_120px_100px_100px_36px] gap-2 px-1 text-xs font-medium text-[#64748b]">
+          <div className="hidden md:grid grid-cols-[2fr_64px_96px_96px_84px_90px_32px] gap-2 px-1 text-xs font-medium text-[#64748b]">
             <span>الصنف</span>
             <span>الكمية</span>
-            <span>سعر الوحدة</span>
+            <span>سعر الشراء</span>
+            <span>سعر البيع</span>
             <span>الخصم</span>
             <span>الإجمالي</span>
             <span></span>
@@ -352,49 +368,93 @@ function NewInvoiceForm() {
 
           {saleItems.map((item) => {
             const lineTotal = item.qty * item.unitPrice - item.discount;
+            const isManual = !item.productId;
             return (
-              <div key={item.id} className="grid grid-cols-1 md:grid-cols-[2fr_80px_120px_100px_100px_36px] gap-2 items-center">
-                <Input
-                  value={item.name}
-                  onChange={(e) => updateItem(item.id, "name", e.target.value)}
-                  placeholder="اسم الصنف"
-                  className="text-sm"
-                />
-                <Input
-                  type="number"
-                  min="1"
-                  value={item.qty}
-                  onChange={(e) => updateItem(item.id, "qty", Math.max(1, parseInt(e.target.value) || 1))}
-                  className="text-sm"
-                  dir="ltr"
-                />
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={item.unitPrice}
-                  onChange={(e) => updateItem(item.id, "unitPrice", parseFloat(e.target.value) || 0)}
-                  className="text-sm"
-                  dir="ltr"
-                />
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={item.discount}
-                  onChange={(e) => updateItem(item.id, "discount", parseFloat(e.target.value) || 0)}
-                  className="text-sm"
-                  dir="ltr"
-                />
-                <div className="text-sm font-medium text-[#0b2345] ltr text-left px-1">
-                  ₪{lineTotal.toFixed(2)}
+              <div key={item.id} className="rounded-xl border border-[#f1f5f9] md:border-0 p-3 md:p-0 space-y-2 md:space-y-0">
+                <div className="grid grid-cols-2 md:grid-cols-[2fr_64px_96px_96px_84px_90px_32px] gap-2 items-center">
+                  <Input
+                    value={item.name}
+                    onChange={(e) => updateItem(item.id, "name", e.target.value)}
+                    placeholder="اسم الصنف"
+                    className="text-sm col-span-2 md:col-span-1"
+                  />
+                  <Input
+                    type="number"
+                    min="1"
+                    value={item.qty}
+                    onChange={(e) => updateItem(item.id, "qty", Math.max(1, parseInt(e.target.value) || 1))}
+                    className="text-sm"
+                    placeholder="الكمية"
+                    aria-label="الكمية"
+                    dir="ltr"
+                  />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.costPrice || ""}
+                    onChange={(e) => updateItem(item.id, "costPrice", parseFloat(e.target.value) || 0)}
+                    className="text-sm"
+                    placeholder="سعر الشراء"
+                    aria-label="سعر الشراء"
+                    dir="ltr"
+                  />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.unitPrice || ""}
+                    onChange={(e) => updateItem(item.id, "unitPrice", parseFloat(e.target.value) || 0)}
+                    className="text-sm"
+                    placeholder="سعر البيع"
+                    aria-label="سعر البيع"
+                    dir="ltr"
+                  />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.discount || ""}
+                    onChange={(e) => updateItem(item.id, "discount", parseFloat(e.target.value) || 0)}
+                    className="text-sm"
+                    placeholder="الخصم"
+                    aria-label="الخصم"
+                    dir="ltr"
+                  />
+                  <div className="text-sm font-medium text-[#0b2345] ltr text-left px-1 flex items-center justify-between md:block">
+                    <span className="md:hidden text-xs text-[#64748b]">الإجمالي</span>
+                    <span>₪{lineTotal.toFixed(2)}</span>
+                  </div>
+                  <button
+                    onClick={() => removeItem(item.id)}
+                    className="hidden md:block p-1.5 rounded-lg text-[#94a3b8] hover:text-red-500 hover:bg-red-50"
+                    aria-label="حذف الصنف"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => removeItem(item.id)}
-                  className="p-1.5 rounded-lg text-[#94a3b8] hover:text-red-500 hover:bg-red-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+
+                {/* Manual item: offer to save it to the catalog + a mobile delete button */}
+                <div className="flex items-center justify-between gap-2">
+                  {isManual ? (
+                    <label className="flex items-center gap-2 text-xs text-[#64748b] cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#104e98] focus:ring-[#104e98]"
+                        checked={!!item.saveToInventory}
+                        onChange={(e) => updateItem(item.id, "saveToInventory", e.target.checked)}
+                      />
+                      حفظ كمنتج جديد في المخزون
+                    </label>
+                  ) : <span />}
+                  <button
+                    onClick={() => removeItem(item.id)}
+                    className="md:hidden flex items-center gap-1 text-xs text-red-500"
+                    aria-label="حذف الصنف"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> حذف
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -671,6 +731,14 @@ function NewInvoiceForm() {
               <dt>الإجمالي</dt>
               <dd className="ltr">₪{total.toFixed(2)}</dd>
             </div>
+            {hasCostData && (
+              <div className="flex justify-between text-xs pt-1">
+                <dt className="text-[#64748b]">الربح التقديري (بيع − شراء)</dt>
+                <dd className={`ltr font-medium ${estimatedProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  ₪{estimatedProfit.toFixed(2)}
+                </dd>
+              </div>
+            )}
             {paidAmount > 0 && (
               <>
                 <div className="flex justify-between text-green-600">

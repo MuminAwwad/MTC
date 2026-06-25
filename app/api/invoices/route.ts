@@ -97,8 +97,11 @@ export async function POST(req: NextRequest) {
       name: string;
       qty: number;
       unitPrice: number;
+      costPrice?: number;
       discount?: number;
       source?: "SALE" | "TICKET_PART" | "TICKET_LABOR";
+      // Manual sale lines: create a catalog product from this line.
+      saveToInventory?: boolean;
     };
 
     const {
@@ -188,6 +191,37 @@ export async function POST(req: NextRequest) {
             : "ISSUED"
           : "DRAFT";
 
+      // Manual sale lines flagged saveToInventory become catalog products
+      // (only when the invoice is actually issued, not on a draft). Their ids
+      // are tracked so we DON'T decrement stock for them — they were bought
+      // for this sale, never held in inventory.
+      const newProductIds = new Set<string>();
+      const resolvedItems: InvoiceItemInput[] = [];
+      for (const item of items) {
+        let productId = item.productId || null;
+        if (
+          !productId &&
+          item.saveToInventory &&
+          (item.source ?? "SALE") === "SALE" &&
+          invoiceStatus !== "DRAFT" &&
+          item.name.trim()
+        ) {
+          const newProduct = await tx.product.create({
+            data: {
+              ownerId: ctx.dbUser.id,
+              name: item.name.trim(),
+              costPrice: item.costPrice ?? 0,
+              sellPrice: item.unitPrice,
+              stockQty: 0,
+            },
+            select: { id: true },
+          });
+          productId = newProduct.id;
+          newProductIds.add(newProduct.id);
+        }
+        resolvedItems.push({ ...item, productId: productId ?? undefined });
+      }
+
       const created = await tx.invoice.create({
         data: {
           ownerId: ctx.dbUser.id,
@@ -209,18 +243,13 @@ export async function POST(req: NextRequest) {
           notes,
           status: invoiceStatus,
           items: {
-            create: items.map((item: {
-              productId?: string;
-              name: string;
-              qty: number;
-              unitPrice: number;
-              discount?: number;
-              source?: "SALE" | "TICKET_PART" | "TICKET_LABOR";
-            }) => ({
+            create: resolvedItems.map((item) => ({
               productId: item.productId ?? null,
               name: item.name,
               qty: item.qty,
               unitPrice: item.unitPrice,
+              // Store cost only when a real purchase price was given.
+              costPrice: item.costPrice && item.costPrice > 0 ? item.costPrice : null,
               discount: item.discount ?? 0,
               total: item.qty * item.unitPrice - (item.discount ?? 0),
               source: item.source ?? "SALE",
@@ -234,8 +263,8 @@ export async function POST(req: NextRequest) {
       });
 
       if (invoiceStatus !== "DRAFT") {
-        for (const item of items) {
-          if (item.productId && item.qty > 0) {
+        for (const item of resolvedItems) {
+          if (item.productId && item.qty > 0 && !newProductIds.has(item.productId)) {
             await decrementStockOrFail(tx, item.productId, item.qty);
             await tx.stockMovement.create({
               data: {

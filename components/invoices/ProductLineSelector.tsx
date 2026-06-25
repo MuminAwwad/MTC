@@ -9,6 +9,7 @@ interface ProductOption {
   name: string;
   sku: string | null;
   sellPrice: number;
+  costPrice: number;
   stockQty: number;
 }
 
@@ -51,7 +52,7 @@ export function ProductLineSelector({ onSelect, placeholder = "ابحث عن م�
 
   const handleCustom = () => {
     if (!query.trim()) return;
-    onSelect({ id: "", name: query.trim(), sku: null, sellPrice: 0, stockQty: 999 });
+    onSelect({ id: "", name: query.trim(), sku: null, sellPrice: 0, costPrice: 0, stockQty: 999 });
     setQuery("");
     setOpen(false);
   };
