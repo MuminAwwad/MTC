@@ -43,6 +43,7 @@ export default function DebtsPage() {
   const [status, setStatus] = useState<DebtStatus | "">("");
   const [outstanding, setOutstanding] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const [payingDebt, setPayingDebt] = useState<DebtRow | null>(null);
   const [payAmount, setPayAmount] = useState("");
@@ -69,14 +70,21 @@ export default function DebtsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     const params = new URLSearchParams({ page: page.toString(), search, ...(status ? { status } : {}) });
-    const res = await fetch(`/api/debts?${params}`);
-    if (res.ok) {
-      const data = await res.json();
-      setDebts(data.debts);
-      setTotal(data.total);
-      setTotalPages(data.pageCount);
-      setOutstanding(data.totalOutstanding);
+    try {
+      const res = await fetch(`/api/debts?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDebts(data.debts);
+        setTotal(data.total);
+        setTotalPages(data.pageCount);
+        setOutstanding(data.totalOutstanding);
+      } else {
+        setLoadError(true);
+      }
+    } catch {
+      setLoadError(true);
     }
     setLoading(false);
   }, [page, search, status]);
@@ -245,6 +253,12 @@ export default function DebtsPage() {
 
       {loading ? (
         <CardSkeleton />
+      ) : loadError ? (
+        <div className="bg-white rounded-xl border border-red-200 p-8 text-center space-y-3">
+          <AlertCircle className="h-8 w-8 text-red-500 mx-auto" />
+          <p className="text-sm text-[#64748b]">تعذّر تحميل الديون. قد تكون هناك مشكلة مؤقتة في الاتصال بالخادم.</p>
+          <Button variant="outline" onClick={() => load()}>إعادة المحاولة</Button>
+        </div>
       ) : debts.length === 0 ? (
         <EmptyState icon={CreditCard} title="لا توجد ديون" description="لا توجد ديون مسجلة حاليًا" />
       ) : (
