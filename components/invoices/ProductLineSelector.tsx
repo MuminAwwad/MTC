@@ -31,7 +31,7 @@ export function ProductLineSelector({ onSelect, placeholder = "ابحث عن م�
     setLoading(true);
     fetch(`/api/products?search=${encodeURIComponent(debouncedQuery)}&limit=10`)
       .then((r) => r.json())
-      .then((d) => setOptions(Array.isArray(d.products) ? d.products : []))
+      .then((d) => setOptions(Array.isArray(d.data) ? d.data : []))
       .catch(() => setOptions([]))
       .finally(() => setLoading(false));
   }, [debouncedQuery, open]);
