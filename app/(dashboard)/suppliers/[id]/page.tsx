@@ -3,13 +3,13 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Edit, Package } from "lucide-react";
+import { Edit, Package, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  PageHeader, CurrencyDisplay, SectionCard, FormField, StatusBadge,
+  PageHeader, CurrencyDisplay, SectionCard, FormField, StatusBadge, ConfirmDialog,
 } from "@/components/shared";
 import { formatDate } from "@/lib/formatters";
 import type { Product, Payable, PayablePayment } from "@prisma/client";
@@ -32,6 +32,8 @@ export default function SupplierDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", company: "", notes: "" });
 
   useEffect(() => {
@@ -62,6 +64,13 @@ export default function SupplierDetailPage() {
     setSaveLoading(false);
   };
 
+  const handleDelete = async () => {
+    setDeleteLoading(true);
+    await fetch(`/api/suppliers/${id}`, { method: "DELETE" });
+    setDeleteLoading(false);
+    router.push("/suppliers");
+  };
+
   if (loading) return <div className="h-48 bg-white rounded-xl animate-pulse" />;
   if (!supplier) return <div className="text-center py-16 text-[#64748b]">المورد غير موجود</div>;
 
@@ -81,10 +90,21 @@ export default function SupplierDetailPage() {
           { label: supplier.name },
         ]}
         action={
-          <Button size="sm" onClick={() => setEditing(!editing)}>
-            <Edit className="h-4 w-4" />
-            {editing ? "إلغاء التعديل" : "تعديل"}
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => setEditing(!editing)}>
+              <Edit className="h-4 w-4" />
+              {editing ? "إلغاء التعديل" : "تعديل"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              حذف
+            </Button>
+          </div>
         }
       />
 
@@ -281,6 +301,16 @@ export default function SupplierDetailPage() {
           </SectionCard>
         </TabsContent>
       </Tabs>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDelete}
+        title="حذف المورد"
+        description={`هل أنت متأكد من حذف "${supplier.name}"؟`}
+        confirmLabel="حذف"
+        loading={deleteLoading}
+      />
     </div>
   );
 }

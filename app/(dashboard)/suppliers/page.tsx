@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Truck } from "lucide-react";
+import { Plus, Truck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   PageHeader,
@@ -11,6 +11,7 @@ import {
   Pagination,
   SectionCard,
   ExportMenu,
+  ConfirmDialog,
 } from "@/components/shared";
 import { formatDate } from "@/lib/formatters";
 
@@ -30,6 +31,8 @@ export default function SuppliersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [deleteSupplier, setDeleteSupplier] = useState<Supplier | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,6 +45,15 @@ export default function SuppliersPage() {
   }, [search, page]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleDelete = async () => {
+    if (!deleteSupplier) return;
+    setDeleteLoading(true);
+    await fetch(`/api/suppliers/${deleteSupplier.id}`, { method: "DELETE" });
+    setDeleteLoading(false);
+    setDeleteSupplier(null);
+    load();
+  };
 
   return (
     <div>
@@ -92,13 +104,22 @@ export default function SuppliersPage() {
                     ) : (
                       <span className="text-[#94a3b8]">—</span>
                     )}
-                    <div className="flex gap-1.5">
+                    <div className="flex items-center gap-1.5">
                       <span className="bg-[#e8f0fc] text-[#104e98] px-2 py-0.5 rounded-full">
                         {s._count.products} منتج
                       </span>
                       <span className={`px-2 py-0.5 rounded-full ${s._count.payables > 0 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}>
                         {s._count.payables} مستحق
                       </span>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => setDeleteSupplier(s)}
+                        aria-label={`حذف ${s.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 </li>
@@ -137,9 +158,20 @@ export default function SuppliersPage() {
                       </td>
                       <td className="px-4 py-3 text-[#94a3b8] text-xs">{formatDate(s.createdAt)}</td>
                       <td className="px-4 py-3">
-                        <Button size="sm" variant="outline" asChild>
-                          <Link href={`/suppliers/${s.id}`}>عرض</Link>
-                        </Button>
+                        <div className="flex items-center gap-1 justify-end">
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={`/suppliers/${s.id}`}>عرض</Link>
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => setDeleteSupplier(s)}
+                            aria-label={`حذف ${s.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -156,6 +188,16 @@ export default function SuppliersPage() {
           </>
         )}
       </SectionCard>
+
+      <ConfirmDialog
+        open={!!deleteSupplier}
+        onClose={() => setDeleteSupplier(null)}
+        onConfirm={handleDelete}
+        title="حذف المورد"
+        description={`هل أنت متأكد من حذف "${deleteSupplier?.name}"؟`}
+        confirmLabel="حذف"
+        loading={deleteLoading}
+      />
     </div>
   );
 }
