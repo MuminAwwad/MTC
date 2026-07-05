@@ -17,6 +17,7 @@ import {
   BarChart3,
   Settings,
   Sparkles,
+  Globe,
   ChevronRight,
   ChevronLeft,
   X,
@@ -63,6 +64,11 @@ const NAV_ITEMS = [
     href: "/expenses",
     label: "المصروفات",
     icon: Receipt,
+  },
+  {
+    href: "/store",
+    label: "المتجر",
+    icon: Globe,
   },
   {
     href: "/reports",
