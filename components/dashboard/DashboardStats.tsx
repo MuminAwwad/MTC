@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { StatCard } from "@/components/shared";
-import { TrendingUp, Wrench, Package, CreditCard } from "lucide-react";
+import { TrendingUp, Wrench, Package, CreditCard, Boxes, Banknote } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import prisma from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
@@ -11,7 +11,7 @@ async function getStats(ownerId: string) {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const [todayInvoices, openTickets, lowStockCount, openDebts] = await Promise.all([
+  const [todayInvoices, openTickets, lowStockCount, openDebts, stockValue] = await Promise.all([
     prisma.invoice.aggregate({
       where: {
         ownerId,
@@ -40,6 +40,17 @@ async function getStats(ownerId: string) {
       },
       select: { amount: true, payments: { select: { amount: true } } },
     }),
+    // Inventory value = what's on the shelves, weighted by quantity: at
+    // cost (money tied up in stock) and at sell price (potential revenue).
+    // Same definition as the inventory report's inventoryValue.
+    prisma.$queryRaw<[{ cost: number; sell: number }]>`
+      SELECT
+        COALESCE(SUM("stockQty"::numeric * "costPrice"), 0) AS cost,
+        COALESCE(SUM("stockQty"::numeric * "sellPrice"), 0) AS sell
+      FROM "Product"
+      WHERE "isActive" = true AND "isDeleted" = false
+      AND "ownerId" = ${ownerId}
+    `,
   ]);
 
   const totalDebt = openDebts.reduce((sum, d) => {
@@ -52,11 +63,20 @@ async function getStats(ownerId: string) {
     openTickets,
     lowStockCount,
     totalDebt,
+    stockCostValue: Number(stockValue[0]?.cost ?? 0),
+    stockSellValue: Number(stockValue[0]?.sell ?? 0),
   };
 }
 
 export async function DashboardStats() {
-  let stats = { todayRevenue: 0, openTickets: 0, lowStockCount: 0, totalDebt: 0 };
+  let stats = {
+    todayRevenue: 0,
+    openTickets: 0,
+    lowStockCount: 0,
+    totalDebt: 0,
+    stockCostValue: 0,
+    stockSellValue: 0,
+  };
 
   try {
     const ctx = await requireUser();
@@ -96,6 +116,20 @@ export async function DashboardStats() {
         value={formatCurrency(stats.totalDebt)}
         iconColor="text-yellow-600"
         iconBg="bg-yellow-100"
+      />
+      <StatCard
+        icon={Boxes}
+        label="تكلفة البضاعة في المخزون"
+        value={formatCurrency(stats.stockCostValue)}
+        iconColor="text-purple-600"
+        iconBg="bg-purple-100"
+      />
+      <StatCard
+        icon={Banknote}
+        label="قيمة بيع البضاعة في المخزون"
+        value={formatCurrency(stats.stockSellValue)}
+        iconColor="text-green-600"
+        iconBg="bg-green-100"
       />
     </div>
   );

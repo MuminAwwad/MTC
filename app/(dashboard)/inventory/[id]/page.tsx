@@ -11,6 +11,7 @@ import {
   Settings,
   Package,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -139,6 +140,15 @@ export default function ProductDetailPage() {
             <Button size="sm" onClick={() => setEditMode(true)}>
               <Edit className="h-4 w-4" />
               تعديل
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              حذف
             </Button>
           </div>
         }

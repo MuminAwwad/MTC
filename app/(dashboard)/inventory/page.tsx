@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Plus, LayoutGrid, List, AlertTriangle, Package, Sparkles } from "lucide-react";
+import { Plus, LayoutGrid, List, AlertTriangle, Package, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -207,6 +207,7 @@ export default function InventoryPage() {
               key={p.id}
               product={p}
               onAdjust={() => setAdjustProduct(p)}
+              onDelete={() => setDeleteProduct(p)}
             />
           ))}
         </div>
@@ -258,6 +259,15 @@ export default function InventoryPage() {
                     </Button>
                     <Button size="sm" variant="outline" className="flex-1" asChild>
                       <Link href={`/inventory/${p.id}`}>عرض</Link>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                      onClick={() => setDeleteProduct(p)}
+                      aria-label={`حذف ${p.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </li>
@@ -318,6 +328,15 @@ export default function InventoryPage() {
                           <Button size="sm" variant="outline" asChild>
                             <Link href={`/inventory/${p.id}`}>عرض</Link>
                           </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => setDeleteProduct(p)}
+                            aria-label={`حذف ${p.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -363,9 +382,11 @@ export default function InventoryPage() {
 function ProductGridCard({
   product,
   onAdjust,
+  onDelete,
 }: {
   product: ProductRow;
   onAdjust: () => void;
+  onDelete: () => void;
 }) {
   const isLow = product.stockQty <= product.minStockQty;
   return (
@@ -402,6 +423,15 @@ function ProductGridCard({
         </Button>
         <Button size="sm" variant="ghost" asChild className="flex-1 text-xs">
           <Link href={`/inventory/${product.id}`}>تفاصيل</Link>
+        </Button>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          onClick={onDelete}
+          aria-label={`حذف ${product.name}`}
+        >
+          <Trash2 className="h-4 w-4" />
         </Button>
       </div>
     </div>
