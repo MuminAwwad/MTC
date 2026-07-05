@@ -5,6 +5,15 @@ import { authCookieOptions, REMEMBER_COOKIE } from "./lib/supabase/cookie-option
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  const pathname = request.nextUrl.pathname;
+  // Public read-only invoice/ticket views; IDs are cuids so links are
+  // unguessable. Used for sharing via WhatsApp/SMS to customers. No auth
+  // gate applies, so skip the Supabase round trip entirely — the page
+  // itself checks the session for staff-only extras.
+  if (pathname.startsWith("/print/")) {
+    return response;
+  }
+
   const remember = request.cookies.get(REMEMBER_COOKIE)?.value === "1";
 
   const supabase = createServerClient(
@@ -33,22 +42,18 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
   const isAuthPage =
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password");
   const isApiRoute = pathname.startsWith("/api");
-  // Public read-only invoice/ticket views; IDs are cuids so links are
-  // unguessable. Used for sharing via WhatsApp/SMS to customers.
-  const isPublicShare = pathname.startsWith("/print/");
 
   if (!user) {
     if (isApiRoute) {
       return NextResponse.json({ error: "غير مصرح" }, { status: 401 });
     }
-    if (!isAuthPage && !isPublicShare) {
+    if (!isAuthPage) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
   }

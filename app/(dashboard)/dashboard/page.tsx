@@ -1,9 +1,20 @@
 import { Suspense } from "react";
+import dynamic from "next/dynamic";
 import { DashboardStats } from "@/components/dashboard/DashboardStats";
-import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
 import { RecentInvoices } from "@/components/dashboard/RecentInvoices";
 import { RecentTickets } from "@/components/dashboard/RecentTickets";
 import { CardSkeleton, LoadingSkeleton } from "@/components/shared";
+
+// recharts is the heaviest client dependency on this route; loading it in
+// its own chunk lets the stats and tables become interactive without
+// waiting for the chart bundle.
+const DashboardCharts = dynamic(
+  () =>
+    import("@/components/dashboard/DashboardCharts").then(
+      (m) => m.DashboardCharts
+    ),
+  { loading: () => <div className="skeleton h-64 rounded-xl" /> }
+);
 
 export const metadata = { title: "لوحة التحكم - MTC Electronics" };
 

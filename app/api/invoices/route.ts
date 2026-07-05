@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [invoices, total] = await Promise.all([
+    const [invoices, total, summary] = await Promise.all([
       prisma.invoice.findMany({
         where,
         include: {
@@ -55,18 +55,17 @@ export async function GET(req: NextRequest) {
         take: ITEMS_PER_PAGE,
       }),
       prisma.invoice.count({ where }),
+      prisma.invoice.aggregate({
+        // Exclude CANCELLED from the totals — they no longer represent money
+        // owed/earned. The "Cancelled" filter tab can still opt-in.
+        where: {
+          ownerId: ctx.dbUser.id,
+          isDeleted: false,
+          ...(status ? { status } : { status: { not: "CANCELLED" } }),
+        },
+        _sum: { total: true, paidAmount: true, remainingAmount: true },
+      }),
     ]);
-
-    const summary = await prisma.invoice.aggregate({
-      // Exclude CANCELLED from the totals — they no longer represent money
-      // owed/earned. The "Cancelled" filter tab can still opt-in.
-      where: {
-        ownerId: ctx.dbUser.id,
-        isDeleted: false,
-        ...(status ? { status } : { status: { not: "CANCELLED" } }),
-      },
-      _sum: { total: true, paidAmount: true, remainingAmount: true },
-    });
 
     return ok({
       invoices,

@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       return ok(customers);
     }
 
-    const [customers, total] = await Promise.all([
+    const [customers, total, spentData] = await Promise.all([
       prisma.customer.findMany({
         where,
         include: {
@@ -62,19 +62,19 @@ export async function GET(request: NextRequest) {
         take: limit,
       }),
       prisma.customer.count({ where }),
+      // Grouped over all the owner's invoices (not just this page's
+      // customers) so it can run in parallel with the page query — the
+      // map below is only read for the customers on the page.
+      prisma.invoice.groupBy({
+        by: ["customerId"],
+        where: {
+          ownerId: ctx.dbUser.id,
+          status: { in: ["PAID", "PARTIAL", "ISSUED"] },
+          isDeleted: false,
+        },
+        _sum: { total: true },
+      }),
     ]);
-
-    const customerIds = customers.map((c) => c.id);
-    const spentData = await prisma.invoice.groupBy({
-      by: ["customerId"],
-      where: {
-        ownerId: ctx.dbUser.id,
-        customerId: { in: customerIds },
-        status: { in: ["PAID", "PARTIAL", "ISSUED"] },
-        isDeleted: false,
-      },
-      _sum: { total: true },
-    });
     const spentMap = Object.fromEntries(
       spentData.map((d) => [d.customerId, Number(d._sum.total ?? 0)])
     );

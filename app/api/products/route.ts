@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       return ok(products);
     }
 
-    const [products, total] = await Promise.all([
+    const [products, total, allProducts] = await Promise.all([
       prisma.product.findMany({
         where,
         include: {
@@ -70,16 +70,15 @@ export async function GET(request: NextRequest) {
         take: limit,
       }),
       prisma.product.count({ where }),
+      prisma.product.findMany({
+        where: { ownerId: ctx.dbUser.id, isDeleted: false, isActive: true },
+        select: { stockQty: true, minStockQty: true },
+      }),
     ]);
 
     const filtered = lowStock
       ? products.filter((p) => p.stockQty <= p.minStockQty)
       : products;
-
-    const allProducts = await prisma.product.findMany({
-      where: { ownerId: ctx.dbUser.id, isDeleted: false, isActive: true },
-      select: { stockQty: true, minStockQty: true },
-    });
     const lowStockCount = allProducts.filter(
       (p) => p.stockQty <= p.minStockQty
     ).length;

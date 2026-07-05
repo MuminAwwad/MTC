@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { invalidateUserCache, requireUser } from "@/lib/auth";
 
 export async function GET() {
   const ctx = await requireUser();
@@ -28,6 +28,7 @@ export async function PUT(req: NextRequest) {
       data: { name: name.trim(), phone: phone || null, address: address || null },
       select: { id: true, name: true, email: true, phone: true, address: true, role: true, createdAt: true },
     });
+    invalidateUserCache(ctx.authEmail);
     return ok(user);
   } catch (e) {
     console.error(e);

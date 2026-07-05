@@ -12,15 +12,31 @@ export async function GET() {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const invoices = await prisma.invoice.findMany({
-      where: {
-        ownerId,
-        createdAt: { gte: sevenDaysAgo },
-        status: { in: ["PAID", "PARTIAL", "ISSUED"] },
-        isDeleted: false,
-      },
-      select: { createdAt: true, total: true },
-    });
+    const [invoices, items] = await Promise.all([
+      prisma.invoice.findMany({
+        where: {
+          ownerId,
+          createdAt: { gte: sevenDaysAgo },
+          status: { in: ["PAID", "PARTIAL", "ISSUED"] },
+          isDeleted: false,
+        },
+        select: { createdAt: true, total: true },
+      }),
+      prisma.invoiceItem.findMany({
+        where: {
+          invoice: {
+            ownerId,
+            createdAt: { gte: sevenDaysAgo },
+            status: { in: ["PAID", "PARTIAL", "ISSUED"] },
+            isDeleted: false,
+          },
+        },
+        select: {
+          total: true,
+          product: { select: { category: { select: { name: true } } } },
+        },
+      }),
+    ]);
 
     const salesByDay: Record<string, number> = {};
     for (let i = 6; i >= 0; i--) {
@@ -41,20 +57,6 @@ export async function GET() {
       date: new Date(date).toLocaleDateString("ar", { weekday: "short", day: "numeric" }),
       total,
     }));
-
-    const items = await prisma.invoiceItem.findMany({
-      where: {
-        invoice: {
-          ownerId,
-          createdAt: { gte: sevenDaysAgo },
-          status: { in: ["PAID", "PARTIAL", "ISSUED"] },
-          isDeleted: false,
-        },
-      },
-      include: {
-        product: { include: { category: true } },
-      },
-    });
 
     const categoryTotals: Record<string, number> = {};
     let grandTotal = 0;

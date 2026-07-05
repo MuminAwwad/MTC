@@ -21,12 +21,17 @@ function createPrismaClient() {
   const pool = new Pool({
     connectionString,
     ...(isRemote ? { ssl: { rejectUnauthorized: false } } : {}),
-    // Supabase's pooler caps total client connections. Each serverless
-    // instance is effectively single-threaded, so keep the per-instance
-    // pool small and reap idle connections promptly so they don't pile up
-    // and exhaust the cap (which surfaces as empty pages on failed queries).
-    max: isRemote ? 1 : 10,
-    idleTimeoutMillis: 10_000,
+    // Supabase's pooler caps total client connections, so keep the
+    // per-instance pool bounded — exhausting the cap surfaces as empty
+    // pages on failed queries. But with Fluid compute one instance serves
+    // many concurrent requests, and routes fan out with Promise.all, so a
+    // single connection serializes every query in the instance. A small
+    // pool (5) keeps parallelism without approaching the pooler's cap
+    // (hundreds of client connections). Idle connections are kept for 30s
+    // so back-to-back requests reuse them instead of paying a fresh
+    // TLS + auth handshake each time.
+    max: isRemote ? 5 : 10,
+    idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
     allowExitOnIdle: true,
   });

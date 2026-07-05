@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (type === "inventory") {
-      const [lowStock, allProducts] = await Promise.all([
+      const [lowStock, allProducts, inventoryValue] = await Promise.all([
         prisma.$queryRaw<Array<{ id: string; name: string; sku: string | null; stockQty: number; minStockQty: number; sellPrice: number }>>`
           SELECT id, name, sku, "stockQty", "minStockQty", "sellPrice"
           FROM "Product"
@@ -117,14 +117,13 @@ export async function GET(req: NextRequest) {
           _sum: { stockQty: true },
           _count: true,
         }),
+        prisma.$queryRaw<[{ value: number }]>`
+          SELECT COALESCE(SUM("stockQty"::numeric * "costPrice"), 0) AS value
+          FROM "Product"
+          WHERE "isActive" = true AND "isDeleted" = false
+          AND "ownerId" = ${ownerId}
+        `,
       ]);
-
-      const inventoryValue = await prisma.$queryRaw<[{ value: number }]>`
-        SELECT COALESCE(SUM("stockQty"::numeric * "costPrice"), 0) AS value
-        FROM "Product"
-        WHERE "isActive" = true AND "isDeleted" = false
-        AND "ownerId" = ${ownerId}
-      `;
 
       return ok({
         type: "inventory",

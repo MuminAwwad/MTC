@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [debts, total] = await Promise.all([
+    const [debts, total, outstandingRows] = await Promise.all([
       prisma.debt.findMany({
         where,
         include: {
@@ -46,20 +46,19 @@ export async function GET(req: NextRequest) {
         take: ITEMS_PER_PAGE,
       }),
       prisma.debt.count({ where }),
+      // Outstanding = sum(debt.amount) − sum(payments). A PARTIAL debt
+      // already has some payments recorded, so summing `amount` alone
+      // over-reports what customers still owe.
+      prisma.debt.findMany({
+        where: {
+          ownerId: ctx.dbUser.id,
+          isDeleted: false,
+          status: { not: "PAID" },
+          NOT: { invoice: { status: "CANCELLED" as const } },
+        },
+        select: { amount: true, payments: { select: { amount: true } } },
+      }),
     ]);
-
-    // Outstanding = sum(debt.amount) − sum(payments). A PARTIAL debt
-    // already has some payments recorded, so summing `amount` alone
-    // over-reports what customers still owe.
-    const outstandingRows = await prisma.debt.findMany({
-      where: {
-        ownerId: ctx.dbUser.id,
-        isDeleted: false,
-        status: { not: "PAID" },
-        NOT: { invoice: { status: "CANCELLED" as const } },
-      },
-      select: { amount: true, payments: { select: { amount: true } } },
-    });
     const totalOutstanding = outstandingRows.reduce((sum, d) => {
       const paid = d.payments.reduce((s, p) => s + Number(p.amount), 0);
       return sum + Number(d.amount) - paid;

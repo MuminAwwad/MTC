@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [expenses, total] = await Promise.all([
+    const [expenses, total, summary] = await Promise.all([
       prisma.expense.findMany({
         where,
         include: { category: true },
@@ -41,12 +41,11 @@ export async function GET(req: NextRequest) {
         take: ITEMS_PER_PAGE,
       }),
       prisma.expense.count({ where }),
+      prisma.expense.aggregate({
+        where: { ownerId: ctx.dbUser.id, isDeleted: false },
+        _sum: { amount: true },
+      }),
     ]);
-
-    const summary = await prisma.expense.aggregate({
-      where: { ownerId: ctx.dbUser.id, isDeleted: false },
-      _sum: { amount: true },
-    });
 
     return ok({
       expenses,
