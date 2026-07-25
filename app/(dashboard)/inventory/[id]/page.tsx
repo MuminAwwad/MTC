@@ -60,6 +60,14 @@ export default function ProductDetailPage() {
       .catch(() => setLoading(false));
   }, [id]);
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch("/api/users/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => setIsAdmin(user?.role === "ADMIN"))
+      .catch(() => {});
+  }, []);
+
   const handleDelete = async () => {
     setDeleteLoading(true);
     await fetch(`/api/products/${id}`, { method: "DELETE" });
@@ -184,15 +192,17 @@ export default function ProductDetailPage() {
 
               <SectionCard title="الأسعار">
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-[#64748b]">سعر التكلفة</span>
-                    <CurrencyDisplay amount={Number(product.costPrice)} />
-                  </div>
+                  {isAdmin && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-[#64748b]">سعر التكلفة</span>
+                      <CurrencyDisplay amount={Number(product.costPrice)} />
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-[#64748b]">سعر البيع</span>
                     <CurrencyDisplay amount={Number(product.sellPrice)} className="font-semibold text-[#0b2345]" />
                   </div>
-                  {profitMargin && (
+                  {isAdmin && profitMargin && (
                     <div className="flex justify-between items-center pt-2 border-t border-[#f1f5f9]">
                       <span className="text-sm text-[#64748b]">هامش الربح</span>
                       <span className="text-sm font-medium text-green-600">
@@ -230,24 +240,26 @@ export default function ProductDetailPage() {
                 )}
               </SectionCard>
 
-              <SectionCard title="قيمة المخزون">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-[#94a3b8] mb-0.5">قيمة التكلفة الإجمالية</p>
-                    <CurrencyDisplay
-                      amount={Number(product.costPrice) * product.stockQty}
-                      className="font-semibold text-[#0b2345]"
-                    />
+              {isAdmin && (
+                <SectionCard title="قيمة المخزون">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-[#94a3b8] mb-0.5">قيمة التكلفة الإجمالية</p>
+                      <CurrencyDisplay
+                        amount={Number(product.costPrice) * product.stockQty}
+                        className="font-semibold text-[#0b2345]"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-[#94a3b8] mb-0.5">قيمة البيع الإجمالية</p>
+                      <CurrencyDisplay
+                        amount={Number(product.sellPrice) * product.stockQty}
+                        className="font-semibold text-green-600"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[#94a3b8] mb-0.5">قيمة البيع الإجمالية</p>
-                    <CurrencyDisplay
-                      amount={Number(product.sellPrice) * product.stockQty}
-                      className="font-semibold text-green-600"
-                    />
-                  </div>
-                </div>
-              </SectionCard>
+                </SectionCard>
+              )}
             </div>
           </div>
         </TabsContent>

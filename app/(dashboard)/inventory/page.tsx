@@ -55,6 +55,16 @@ export default function InventoryPage() {
   const [adjustProduct, setAdjustProduct] = useState<ProductRow | null>(null);
   const [deleteProduct, setDeleteProduct] = useState<ProductRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Cost price is management-sensitive — only admins see it, staff only see
+  // the sell price they need for the counter.
+  useEffect(() => {
+    fetch("/api/users/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => setIsAdmin(user?.role === "ADMIN"))
+      .catch(() => {});
+  }, []);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -236,7 +246,7 @@ export default function InventoryPage() {
                       }}
                     />
                   </div>
-                  <dl className="grid grid-cols-3 gap-2 text-xs">
+                  <dl className={`grid ${isAdmin ? "grid-cols-3" : "grid-cols-2"} gap-2 text-xs`}>
                     <div>
                       <dt className="text-[#64748b]">المخزون</dt>
                       <dd className={`mt-0.5 font-semibold flex items-center gap-1 ${isLow ? "text-red-600" : "text-[#1e293b]"}`}>
@@ -244,10 +254,12 @@ export default function InventoryPage() {
                         {isLow && <AlertTriangle className="h-3 w-3" />}
                       </dd>
                     </div>
-                    <div>
-                      <dt className="text-[#64748b]">التكلفة</dt>
-                      <dd className="mt-0.5 ltr text-[#1e293b]">₪{Number(p.costPrice).toFixed(2)}</dd>
-                    </div>
+                    {isAdmin && (
+                      <div>
+                        <dt className="text-[#64748b]">التكلفة</dt>
+                        <dd className="mt-0.5 ltr text-[#1e293b]">₪{Number(p.costPrice).toFixed(2)}</dd>
+                      </div>
+                    )}
                     <div>
                       <dt className="text-[#64748b]">البيع</dt>
                       <dd className="mt-0.5 ltr text-[#1e293b]">₪{Number(p.sellPrice).toFixed(2)}</dd>
@@ -282,7 +294,7 @@ export default function InventoryPage() {
                 <tr className="border-b border-[#e2e8f0]">
                   <th className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">المنتج</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">الفئة</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">سعر التكلفة</th>
+                  {isAdmin && <th className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">سعر التكلفة</th>}
                   <th className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">سعر البيع</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">المخزون</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">الحالة</th>
@@ -301,7 +313,7 @@ export default function InventoryPage() {
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-[#64748b]">{p.category?.name ?? "—"}</td>
-                      <td className="px-4 py-3"><CurrencyDisplay amount={Number(p.costPrice)} size="sm" /></td>
+                      {isAdmin && <td className="px-4 py-3"><CurrencyDisplay amount={Number(p.costPrice)} size="sm" /></td>}
                       <td className="px-4 py-3"><CurrencyDisplay amount={Number(p.sellPrice)} size="sm" /></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
