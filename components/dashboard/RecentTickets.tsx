@@ -24,7 +24,7 @@ export async function RecentTickets() {
   try {
     const ctx = await requireUser();
     if (!(ctx instanceof NextResponse)) {
-      tickets = await getRecentTickets(ctx.dbUser.id);
+      tickets = await getRecentTickets(ctx.ownerId);
     }
   } catch {
     // DB not connected

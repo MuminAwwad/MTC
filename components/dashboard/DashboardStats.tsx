@@ -77,11 +77,13 @@ export async function DashboardStats() {
     stockCostValue: 0,
     stockSellValue: 0,
   };
+  let isAdmin = false;
 
   try {
     const ctx = await requireUser();
     if (!(ctx instanceof NextResponse)) {
-      stats = await getStats(ctx.dbUser.id);
+      stats = await getStats(ctx.ownerId);
+      isAdmin = ctx.dbUser.role === "ADMIN";
     }
   } catch {
     // DB might not be connected yet — show zeros
@@ -117,20 +119,24 @@ export async function DashboardStats() {
         iconColor="text-yellow-600"
         iconBg="bg-yellow-100"
       />
-      <StatCard
-        icon={Boxes}
-        label="تكلفة البضاعة في المخزون"
-        value={formatCurrency(stats.stockCostValue)}
-        iconColor="text-purple-600"
-        iconBg="bg-purple-100"
-      />
-      <StatCard
-        icon={Banknote}
-        label="قيمة بيع البضاعة في المخزون"
-        value={formatCurrency(stats.stockSellValue)}
-        iconColor="text-green-600"
-        iconBg="bg-green-100"
-      />
+      {isAdmin && (
+        <StatCard
+          icon={Boxes}
+          label="تكلفة البضاعة في المخزون"
+          value={formatCurrency(stats.stockCostValue)}
+          iconColor="text-purple-600"
+          iconBg="bg-purple-100"
+        />
+      )}
+      {isAdmin && (
+        <StatCard
+          icon={Banknote}
+          label="قيمة بيع البضاعة في المخزون"
+          value={formatCurrency(stats.stockSellValue)}
+          iconColor="text-green-600"
+          iconBg="bg-green-100"
+        />
+      )}
     </div>
   );
 }

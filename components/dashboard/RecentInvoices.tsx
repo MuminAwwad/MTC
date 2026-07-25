@@ -23,7 +23,7 @@ export async function RecentInvoices() {
   try {
     const ctx = await requireUser();
     if (!(ctx instanceof NextResponse)) {
-      invoices = await getRecentInvoices(ctx.dbUser.id);
+      invoices = await getRecentInvoices(ctx.ownerId);
     }
   } catch {
     // DB not connected
