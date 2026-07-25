@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const all = searchParams.get("all") === "true";
 
     const where = {
-      ownerId: ctx.dbUser.id,
+      ownerId: ctx.ownerId,
       isDeleted: false,
       ...(search
         ? {
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.product.count({ where }),
       prisma.product.findMany({
-        where: { ownerId: ctx.dbUser.id, isDeleted: false, isActive: true },
+        where: { ownerId: ctx.ownerId, isDeleted: false, isActive: true },
         select: { stockQty: true, minStockQty: true },
       }),
     ]);
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
 
     if (normalizedSku) {
       const exists = await prisma.product.findFirst({
-        where: { ownerId: ctx.dbUser.id, sku: normalizedSku, isDeleted: false },
+        where: { ownerId: ctx.ownerId, sku: normalizedSku, isDeleted: false },
         select: { id: true, name: true },
       });
       if (exists) {
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     if (normalizedBarcode) {
       const exists = await prisma.product.findFirst({
-        where: { ownerId: ctx.dbUser.id, barcode: normalizedBarcode, isDeleted: false },
+        where: { ownerId: ctx.ownerId, barcode: normalizedBarcode, isDeleted: false },
         select: { id: true, name: true },
       });
       if (exists) {
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
     const product = await prisma.$transaction(async (tx) => {
       const p = await tx.product.create({
         data: {
-          ownerId: ctx.dbUser.id,
+          ownerId: ctx.ownerId,
           name: data.name,
           sku: normalizedSku,
           barcode: normalizedBarcode,
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
       if (data.stockQty > 0) {
         await tx.stockMovement.create({
           data: {
-            ownerId: ctx.dbUser.id,
+            ownerId: ctx.ownerId,
             productId: p.id,
             createdById: ctx.dbUser.id,
             type: "IN",

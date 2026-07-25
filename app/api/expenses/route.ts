@@ -3,10 +3,10 @@ import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { Currency } from "@prisma/client";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
-import { requireUser } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
-  const ctx = await requireUser();
+  const ctx = await requireAdmin();
   if (ctx instanceof NextResponse) return ctx;
 
   try {
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const dateTo = searchParams.get("dateTo");
 
     const where = {
-      ownerId: ctx.dbUser.id,
+      ownerId: ctx.ownerId,
       isDeleted: false,
       ...(categoryId ? { categoryId } : {}),
       ...(search ? { description: { contains: search, mode: "insensitive" as const } } : {}),
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.expense.count({ where }),
       prisma.expense.aggregate({
-        where: { ownerId: ctx.dbUser.id, isDeleted: false },
+        where: { ownerId: ctx.ownerId, isDeleted: false },
         _sum: { amount: true },
       }),
     ]);
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const ctx = await requireUser();
+  const ctx = await requireAdmin();
   if (ctx instanceof NextResponse) return ctx;
 
   try {
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     if (categoryId) {
       const category = await prisma.expenseCategory.findFirst({
-        where: { id: categoryId, ownerId: ctx.dbUser.id, isDeleted: false },
+        where: { id: categoryId, ownerId: ctx.ownerId, isDeleted: false },
         select: { id: true },
       });
       if (!category) return ok({ error: "الفئة غير موجودة" }, { status: 404 });
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     const expense = await prisma.expense.create({
       data: {
-        ownerId: ctx.dbUser.id,
+        ownerId: ctx.ownerId,
         categoryId: categoryId || null,
         amount,
         currency: currency as Currency,
@@ -98,13 +98,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const ctx = await requireUser();
+  const ctx = await requireAdmin();
   if (ctx instanceof NextResponse) return ctx;
 
   try {
     const { id } = await req.json();
     const result = await prisma.expense.updateMany({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
       data: { isDeleted: true },
     });
     if (result.count === 0) return ok({ error: "المصروف غير موجود" }, { status: 404 });

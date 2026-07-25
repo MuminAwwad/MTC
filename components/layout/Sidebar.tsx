@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui";
@@ -11,6 +12,7 @@ import {
   Package,
   Wrench,
   Users,
+  UserCog,
   Truck,
   CreditCard,
   Receipt,
@@ -74,6 +76,13 @@ const NAV_ITEMS = [
     href: "/reports",
     label: "التقارير",
     icon: BarChart3,
+    adminOnly: true,
+  },
+  {
+    href: "/employees",
+    label: "الموظفون",
+    icon: UserCog,
+    adminOnly: true,
   },
   {
     href: "/chat",
@@ -95,6 +104,16 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/users/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => setIsAdmin(user?.role === "ADMIN"))
+      .catch(() => {});
+  }, []);
+
+  const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   const NavContent = () => (
     <>
@@ -121,7 +140,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 py-4 overflow-y-auto">
         <ul className="space-y-0.5 px-2">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
               pathname === item.href ||

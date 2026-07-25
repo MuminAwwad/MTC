@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params;
     const ticket = await prisma.maintenanceTicket.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
       select: { id: true },
     });
     if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
@@ -41,13 +41,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (unitCost === undefined || unitCost < 0) return ok({ error: "السعر غير صالح" }, { status: 400 });
 
     const ticket = await prisma.maintenanceTicket.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
     });
     if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
 
     if (productId) {
       const product = await prisma.product.findFirst({
-        where: { id: productId, ownerId: ctx.dbUser.id, isDeleted: false },
+        where: { id: productId, ownerId: ctx.ownerId, isDeleted: false },
         select: { id: true },
       });
       if (!product) return ok({ error: "المنتج غير موجود" }, { status: 404 });
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       if (productId) {
         await issueStockFromInventory(tx, {
-          ownerId: ctx.dbUser.id,
+          ownerId: ctx.ownerId,
           userId: ctx.dbUser.id,
           productId,
           qty,
@@ -101,7 +101,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const { partId } = await req.json();
 
     const ticket = await prisma.maintenanceTicket.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
       select: { id: true },
     });
     if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
@@ -113,7 +113,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       await tx.ticketPart.delete({ where: { id: partId } });
       if (part.productId) {
         await returnStockToInventory(tx, {
-          ownerId: ctx.dbUser.id,
+          ownerId: ctx.ownerId,
           userId: ctx.dbUser.id,
           productId: part.productId,
           qty: part.qty,

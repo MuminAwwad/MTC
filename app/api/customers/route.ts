@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const all = searchParams.get("all") === "true";
 
     const where = {
-      ownerId: ctx.dbUser.id,
+      ownerId: ctx.ownerId,
       isDeleted: false,
       ...(search
         ? {
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
       prisma.invoice.groupBy({
         by: ["customerId"],
         where: {
-          ownerId: ctx.dbUser.id,
+          ownerId: ctx.ownerId,
           status: { in: ["PAID", "PARTIAL", "ISSUED"] },
           isDeleted: false,
         },
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     if (normalizedPhone) {
       const existing = await prisma.customer.findFirst({
-        where: { ownerId: ctx.dbUser.id, phone: normalizedPhone, isDeleted: false },
+        where: { ownerId: ctx.ownerId, phone: normalizedPhone, isDeleted: false },
         select: { id: true, name: true },
       });
       if (existing) {
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
 
     const customer = await prisma.customer.create({
       data: {
-        ownerId: ctx.dbUser.id,
+        ownerId: ctx.ownerId,
         name: parsed.data.name,
         phone: normalizedPhone,
         address: parsed.data.address ?? null,

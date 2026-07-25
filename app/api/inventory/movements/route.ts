@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") ?? String(ITEMS_PER_PAGE));
 
     const where = {
-      ownerId: ctx.dbUser.id,
+      ownerId: ctx.ownerId,
       ...(search
         ? { product: { name: { contains: search, mode: "insensitive" as const } } }
         : {}),

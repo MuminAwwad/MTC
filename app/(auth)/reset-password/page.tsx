@@ -23,22 +23,41 @@ function ResetPasswordForm() {
   const [sessionReady, setSessionReady] = useState(false);
 
   useEffect(() => {
+    const supabase = createClient();
     const code = searchParams.get("code");
-    if (!code) {
-      setError("رابط إعادة التعيين غير صالح أو منتهي الصلاحية");
-      setVerifying(false);
+    const invalidMessage = "رابط إعادة التعيين غير صالح أو منتهي الصلاحية";
+
+    // Links generated client-side (the "forgot password" form, using the
+    // PKCE-flow browser client) arrive as ?code=... and need an explicit
+    // exchange. Links generated server-side via the admin API (employee
+    // invites — there's no browser context to hold a PKCE verifier) arrive
+    // as a #access_token=&refresh_token=... hash instead. We parse and set
+    // that session directly rather than relying on the client's automatic
+    // detectSessionInUrl handling, which doesn't reliably fire for these.
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+        if (error) { setError(invalidMessage); setSessionReady(false); }
+        else setSessionReady(true);
+        setVerifying(false);
+      });
       return;
     }
 
-    const supabase = createClient();
-    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      if (error) {
-        setError("رابط إعادة التعيين غير صالح أو منتهي الصلاحية");
-      } else {
-        setSessionReady(true);
-      }
-      setVerifying(false);
-    });
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    if (accessToken && refreshToken) {
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error }) => {
+        if (error) { setError(invalidMessage); setSessionReady(false); }
+        else setSessionReady(true);
+        setVerifying(false);
+      });
+      return;
+    }
+
+    setError(invalidMessage);
+    setSessionReady(false);
+    setVerifying(false);
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {

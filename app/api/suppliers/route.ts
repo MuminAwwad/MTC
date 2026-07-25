@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const all = searchParams.get("all") === "true";
 
     const where = {
-      ownerId: ctx.dbUser.id,
+      ownerId: ctx.ownerId,
       isDeleted: false,
       ...(search
         ? {
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
 
     if (normalizedPhone) {
       const existing = await prisma.supplier.findFirst({
-        where: { ownerId: ctx.dbUser.id, phone: normalizedPhone, isDeleted: false },
+        where: { ownerId: ctx.ownerId, phone: normalizedPhone, isDeleted: false },
         select: { id: true, name: true },
       });
       if (existing) {
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
 
     const supplier = await prisma.supplier.create({
       data: {
-        ownerId: ctx.dbUser.id,
+        ownerId: ctx.ownerId,
         name: parsed.data.name,
         phone: normalizedPhone,
         company: parsed.data.company ?? null,

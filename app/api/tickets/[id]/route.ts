@@ -18,7 +18,7 @@ export const GET = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   try {
     const { id } = await params;
     const ticket = await prisma.maintenanceTicket.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
       include: {
         customer: true,
         parts: { include: { product: { select: { id: true, name: true, sku: true } } }, orderBy: { createdAt: "asc" } },
@@ -62,7 +62,7 @@ export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
     } = body;
 
     const ticket = await prisma.maintenanceTicket.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
       include: { invoice: { select: { id: true } } },
     });
     if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
@@ -102,7 +102,7 @@ export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
     }
     if (customerId !== undefined && customerId !== ticket.customerId) {
       const target = await prisma.customer.findFirst({
-        where: { id: customerId, ownerId: ctx.dbUser.id, isDeleted: false },
+        where: { id: customerId, ownerId: ctx.ownerId, isDeleted: false },
         select: { id: true },
       });
       if (!target) return ok({ error: "العميل غير موجود" }, { status: 404 });
@@ -170,7 +170,7 @@ export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
 export const DELETE = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
   const deleted = await prisma.$transaction((tx) =>
-    softDeleteTicket(tx, ctx.dbUser.id, ctx.dbUser.id, id)
+    softDeleteTicket(tx, ctx.ownerId, ctx.dbUser.id, id)
   );
   if (!deleted) throw new ApiError("التذكرة غير موجودة", 404);
   return ok({ success: true });

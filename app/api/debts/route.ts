@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const customerId = searchParams.get("customerId") ?? "";
 
     const where = {
-      ownerId: ctx.dbUser.id,
+      ownerId: ctx.ownerId,
       isDeleted: false,
       // Hide debts whose linked invoice was cancelled. NOT { invoice: ... }
       // is false only when an invoice exists AND its status matches; debts
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       // over-reports what customers still owe.
       prisma.debt.findMany({
         where: {
-          ownerId: ctx.dbUser.id,
+          ownerId: ctx.ownerId,
           isDeleted: false,
           status: { not: "PAID" },
           NOT: { invoice: { status: "CANCELLED" as const } },
@@ -88,14 +88,14 @@ export async function POST(req: NextRequest) {
     if (!amount || amount <= 0) return ok({ error: "المبلغ يجب أن يكون أكبر من صفر" }, { status: 400 });
 
     const customer = await prisma.customer.findFirst({
-      where: { id: customerId, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id: customerId, ownerId: ctx.ownerId, isDeleted: false },
       select: { id: true },
     });
     if (!customer) return ok({ error: "العميل غير موجود" }, { status: 404 });
 
     const debt = await prisma.debt.create({
       data: {
-        ownerId: ctx.dbUser.id,
+        ownerId: ctx.ownerId,
         customerId,
         amount,
         currency: currency as Currency,

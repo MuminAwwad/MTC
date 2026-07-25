@@ -7,6 +7,6 @@ export const maxDuration = 300;
 
 /** Sync the store catalog from this system's products (manual trigger). */
 export const POST = withAuth(async (_req, ctx) => {
-  const report = await runManagementSync(ctx.dbUser.id, { source: "manual" });
+  const report = await runManagementSync(ctx.ownerId, { source: "manual" });
   return ok(report, { status: report.ok ? 200 : 500 });
 });

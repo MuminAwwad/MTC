@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const dateTo = searchParams.get("dateTo");
 
     const where = {
-      ownerId: ctx.dbUser.id,
+      ownerId: ctx.ownerId,
       isDeleted: false,
       ...(status ? { status } : {}),
       ...(customerId ? { customerId } : {}),
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
         // Exclude CANCELLED from the totals — they no longer represent money
         // owed/earned. The "Cancelled" filter tab can still opt-in.
         where: {
-          ownerId: ctx.dbUser.id,
+          ownerId: ctx.ownerId,
           isDeleted: false,
           ...(status ? { status } : { status: { not: "CANCELLED" } }),
         },
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
 
     if (ticketId) {
       const existing = await prisma.invoice.findFirst({
-        where: { ticketId, ownerId: ctx.dbUser.id },
+        where: { ticketId, ownerId: ctx.ownerId },
         select: { id: true, invoiceNumber: true },
       });
       if (existing) {
@@ -151,14 +151,14 @@ export async function POST(req: NextRequest) {
       }
 
       const ticket = await prisma.maintenanceTicket.findFirst({
-        where: { id: ticketId, ownerId: ctx.dbUser.id, isDeleted: false },
+        where: { id: ticketId, ownerId: ctx.ownerId, isDeleted: false },
         select: { id: true },
       });
       if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
     }
 
     const customer = await prisma.customer.findFirst({
-      where: { id: customerId, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id: customerId, ownerId: ctx.ownerId, isDeleted: false },
       select: { id: true },
     });
     if (!customer) return ok({ error: "العميل غير موجود" }, { status: 404 });
@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
     const remaining = total - paid;
 
     const invoice = await prisma.$transaction(async (tx) => {
-      const invoiceNumber = await generateInvoiceNumber(tx, ctx.dbUser.id);
+      const invoiceNumber = await generateInvoiceNumber(tx, ctx.ownerId);
 
       const invoiceStatus: InvoiceStatus =
         status === "ISSUED"
@@ -207,7 +207,7 @@ export async function POST(req: NextRequest) {
         ) {
           const newProduct = await tx.product.create({
             data: {
-              ownerId: ctx.dbUser.id,
+              ownerId: ctx.ownerId,
               name: item.name.trim(),
               costPrice: item.costPrice ?? 0,
               sellPrice: item.unitPrice,
@@ -223,7 +223,7 @@ export async function POST(req: NextRequest) {
 
       const created = await tx.invoice.create({
         data: {
-          ownerId: ctx.dbUser.id,
+          ownerId: ctx.ownerId,
           invoiceNumber,
           customerId,
           createdById: ctx.dbUser.id,
@@ -267,7 +267,7 @@ export async function POST(req: NextRequest) {
             await decrementStockOrFail(tx, item.productId, item.qty);
             await tx.stockMovement.create({
               data: {
-                ownerId: ctx.dbUser.id,
+                ownerId: ctx.ownerId,
                 productId: item.productId,
                 createdById: ctx.dbUser.id,
                 type: "OUT",
@@ -295,7 +295,7 @@ export async function POST(req: NextRequest) {
                   : base;
               await tx.debt.create({
                 data: {
-                  ownerId: ctx.dbUser.id,
+                  ownerId: ctx.ownerId,
                   customerId,
                   invoiceId: created.id,
                   amount: amt,
@@ -310,7 +310,7 @@ export async function POST(req: NextRequest) {
           } else {
             await tx.debt.create({
               data: {
-                ownerId: ctx.dbUser.id,
+                ownerId: ctx.ownerId,
                 customerId,
                 invoiceId: created.id,
                 amount: remaining,

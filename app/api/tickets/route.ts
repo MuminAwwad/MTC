@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const all = searchParams.get("all") === "true";
 
     const where = {
-      ownerId: ctx.dbUser.id,
+      ownerId: ctx.ownerId,
       isDeleted: false,
       ...(status ? { status } : {}),
       ...(priority ? { priority } : {}),
@@ -85,16 +85,16 @@ export async function POST(req: NextRequest) {
     if (!problemDescription?.trim()) return ok({ error: "وصف المشكلة مطلوب" }, { status: 400 });
 
     const customer = await prisma.customer.findFirst({
-      where: { id: customerId, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id: customerId, ownerId: ctx.ownerId, isDeleted: false },
       select: { id: true },
     });
     if (!customer) return ok({ error: "العميل غير موجود" }, { status: 404 });
 
     const ticket = await prisma.$transaction(async (tx) => {
-      const ticketNumber = await generateTicketNumber(tx, ctx.dbUser.id);
+      const ticketNumber = await generateTicketNumber(tx, ctx.ownerId);
       return tx.maintenanceTicket.create({
         data: {
-          ownerId: ctx.dbUser.id,
+          ownerId: ctx.ownerId,
           ticketNumber,
           customerId,
           createdById: ctx.dbUser.id,

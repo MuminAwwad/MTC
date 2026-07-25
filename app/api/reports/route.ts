@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
-  const ctx = await requireUser();
+  const ctx = await requireAdmin();
   if (ctx instanceof NextResponse) return ctx;
-  const ownerId = ctx.dbUser.id;
+  const ownerId = ctx.ownerId;
 
   try {
     const { searchParams } = req.nextUrl;

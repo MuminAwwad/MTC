@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     }
     const data = parsed.data;
 
-    const ownerId = ctx.dbUser.id;
+    const ownerId = ctx.ownerId;
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Resolve supplier — id wins (scoped to owner), else phone match, else create

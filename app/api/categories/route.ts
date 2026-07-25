@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     const categories = await prisma.category.findMany({
       where: {
-        ownerId: ctx.dbUser.id,
+        ownerId: ctx.ownerId,
         isDeleted: false,
         ...(search ? { name: { contains: search, mode: "insensitive" } } : {}),
       },
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     const existing = await prisma.category.findFirst({
       where: {
-        ownerId: ctx.dbUser.id,
+        ownerId: ctx.ownerId,
         name: { equals: name, mode: "insensitive" },
         isDeleted: false,
       },
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
         Date.now();
 
     const category = await prisma.category.create({
-      data: { ownerId: ctx.dbUser.id, name, slug, icon },
+      data: { ownerId: ctx.ownerId, name, slug, icon },
     });
 
     return ok(category, { status: 201 });

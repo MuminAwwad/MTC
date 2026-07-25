@@ -33,7 +33,7 @@ function isValidEnvelope(v: unknown): v is DraftEnvelope {
 export async function POST(req: NextRequest) {
   const ctx = await requireUser();
   if (ctx instanceof NextResponse) return ctx;
-  const ownerId = ctx.dbUser.id;
+  const ownerId = ctx.ownerId;
 
   try {
     const body = await req.json();

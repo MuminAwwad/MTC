@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
     try {
       const supabase = createClient();
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: "https://mtc-livid.vercel.app/reset-password",
+        redirectTo: "https://manage.mtcelectronics.com/reset-password",
       });
 
       if (resetError) {

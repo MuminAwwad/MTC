@@ -6,6 +6,14 @@ import { createClient } from "./supabase/server";
 
 export interface AuthContext {
   authEmail: string;
+  /**
+   * The shop's data-scope id: shopOwnerId for an employee, or the user's own
+   * id for a shop owner / independent account. Every ownerId-scoped query or
+   * write must use this, not dbUser.id, so an owner and their employees share
+   * one data set. Use dbUser.id (not this) when attributing an action to the
+   * specific person who performed it (createdById, stock movement actor…).
+   */
+  ownerId: string;
   dbUser: {
     id: string;
     name: string;
@@ -22,6 +30,7 @@ type DbUserRow = {
   role: UserRole;
   isActive: boolean;
   isDeleted: boolean;
+  shopOwnerId: string | null;
 };
 
 /**
@@ -48,7 +57,7 @@ async function loadDbUser(
 
   let dbUser = await prisma.user.findFirst({
     where: { email: { equals: email, mode: "insensitive" } },
-    select: { id: true, name: true, email: true, role: true, isActive: true, isDeleted: true },
+    select: { id: true, name: true, email: true, role: true, isActive: true, isDeleted: true, shopOwnerId: true },
   });
 
   if (!dbUser) {
@@ -58,7 +67,7 @@ async function loadDbUser(
     const address = typeof meta.address === "string" ? meta.address : null;
     dbUser = await prisma.user.create({
       data: { id: authUser.id, name, email, phone, address, role: "STAFF" },
-      select: { id: true, name: true, email: true, role: true, isActive: true, isDeleted: true },
+      select: { id: true, name: true, email: true, role: true, isActive: true, isDeleted: true, shopOwnerId: true },
     });
   }
 
@@ -98,7 +107,7 @@ export const requireUser = cache(async (): Promise<AuthContext | NextResponse> =
     return NextResponse.json({ error: "الحساب معطل" }, { status: 403 });
   }
 
-  return { authEmail: email, dbUser };
+  return { authEmail: email, ownerId: dbUser.shopOwnerId ?? dbUser.id, dbUser };
 });
 
 export async function requireAdmin(): Promise<AuthContext | NextResponse> {

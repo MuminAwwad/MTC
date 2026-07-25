@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
       return ok({ error: "نوع تقرير غير معروف" }, { status: 400 });
     }
 
-    const dataset = await buildExportDataset(type, ctx.dbUser.id, searchParams);
+    const dataset = await buildExportDataset(type, ctx.ownerId, searchParams);
     return ok(dataset);
   } catch (e) {
     console.error("GET /api/export", e);

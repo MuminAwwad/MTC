@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { Currency } from "@prisma/client";
-import { withAuth, ApiError, parseBody } from "@/lib/api-handler";
+import { withAdmin, ApiError, parseBody } from "@/lib/api-handler";
 
 const patchSchema = z.object({
   categoryId: z.string().nullish(),
@@ -12,19 +12,19 @@ const patchSchema = z.object({
   date: z.string().nullish(),
 });
 
-export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
+export const PATCH = withAdmin<{ id: string }>(async (req, ctx, { params }) => {
   const { id } = await params;
   const { categoryId, amount, currency, description, date } = await parseBody(req, patchSchema);
 
   const expense = await prisma.expense.findFirst({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     select: { id: true },
   });
   if (!expense) throw new ApiError("المصروف غير موجود", 404);
 
   if (categoryId) {
     const category = await prisma.expenseCategory.findFirst({
-      where: { id: categoryId, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id: categoryId, ownerId: ctx.ownerId, isDeleted: false },
       select: { id: true },
     });
     if (!category) throw new ApiError("الفئة غير موجودة", 404);
@@ -45,10 +45,10 @@ export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   return ok(updated);
 });
 
-export const DELETE = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
+export const DELETE = withAdmin<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
   const result = await prisma.expense.updateMany({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     data: { isDeleted: true },
   });
   if (result.count === 0) throw new ApiError("المصروف غير موجود", 404);

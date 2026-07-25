@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 export async function GET() {
   const ctx = await requireUser();
   if (ctx instanceof NextResponse) return ctx;
-  const ownerId = ctx.dbUser.id;
+  const ownerId = ctx.ownerId;
 
   try {
     const sevenDaysAgo = new Date();

@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
           }
 
           if (isActionTool(call.function.name)) {
-            const preview = await previewAction(call.function.name, ctx.dbUser.id, args);
+            const preview = await previewAction(call.function.name, ctx.ownerId, args);
             if (preview.ok) {
               staged.push(preview.action);
               return { id: call.id, result: { staged: true, summary: preview.action.summary } };
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
             return { id: call.id, result: { error: preview.error } };
           }
 
-          const result = await executeTool(call.function.name, ctx.dbUser.id, args);
+          const result = await executeTool(call.function.name, ctx.ownerId, args);
           return { id: call.id, result };
         })
       );

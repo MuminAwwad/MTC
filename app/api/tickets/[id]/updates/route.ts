@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!note?.trim()) return ok({ error: "الملاحظة مطلوبة" }, { status: 400 });
 
     const ticket = await prisma.maintenanceTicket.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
     });
     if (!ticket) return ok({ error: "التذكرة غير موجودة" }, { status: 404 });
 

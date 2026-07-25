@@ -20,7 +20,7 @@ const schema = z.object({
 export const GET = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
   const product = await prisma.product.findFirst({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     include: {
       category: true,
       supplier: true,
@@ -58,7 +58,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
 
   if (normalizedSku) {
     const exists = await prisma.product.findFirst({
-      where: { ownerId: ctx.dbUser.id, sku: normalizedSku, isDeleted: false, NOT: { id } },
+      where: { ownerId: ctx.ownerId, sku: normalizedSku, isDeleted: false, NOT: { id } },
       select: { id: true, name: true },
     });
     if (exists) {
@@ -71,7 +71,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
 
   if (normalizedBarcode) {
     const exists = await prisma.product.findFirst({
-      where: { ownerId: ctx.dbUser.id, barcode: normalizedBarcode, isDeleted: false, NOT: { id } },
+      where: { ownerId: ctx.ownerId, barcode: normalizedBarcode, isDeleted: false, NOT: { id } },
       select: { id: true, name: true },
     });
     if (exists) {
@@ -83,7 +83,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   }
 
   const result = await prisma.product.updateMany({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     data: {
       ...data,
       sku: data.sku === undefined ? undefined : normalizedSku,
@@ -99,7 +99,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
 export const DELETE = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
   const result = await prisma.product.updateMany({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     data: { isDeleted: true, isActive: false },
   });
   if (result.count === 0) throw new ApiError("المنتج غير موجود", 404);

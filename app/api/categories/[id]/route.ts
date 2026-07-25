@@ -11,7 +11,7 @@ const schema = z.object({
 export const GET = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
   const category = await prisma.category.findFirst({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     include: {
       _count: { select: { products: { where: { isDeleted: false } } } },
     },
@@ -28,7 +28,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   if (normalizedName) {
     const existing = await prisma.category.findFirst({
       where: {
-        ownerId: ctx.dbUser.id,
+        ownerId: ctx.ownerId,
         name: { equals: normalizedName, mode: "insensitive" },
         isDeleted: false,
         NOT: { id },
@@ -44,7 +44,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   }
 
   const result = await prisma.category.updateMany({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     data: { ...data, name: normalizedName ?? data.name },
   });
   if (result.count === 0) throw new ApiError("الفئة غير موجودة", 404);
@@ -56,7 +56,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
 export const DELETE = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
   const result = await prisma.category.updateMany({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     data: { isDeleted: true },
   });
   if (result.count === 0) throw new ApiError("الفئة غير موجودة", 404);

@@ -13,7 +13,7 @@ const debtInclude = {
 export const GET = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
   const debt = await prisma.debt.findFirst({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     include: debtInclude,
   });
   if (!debt) throw new ApiError("الدين غير موجود", 404);
@@ -29,7 +29,7 @@ export const GET = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
  */
 export const DELETE = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
-  const result = await prisma.$transaction((tx) => softDeleteDebt(tx, ctx.dbUser.id, id));
+  const result = await prisma.$transaction((tx) => softDeleteDebt(tx, ctx.ownerId, id));
   if (result === "not_found") throw new ApiError("الدين غير موجود", 404);
   if (result === "linked") {
     throw new ApiError("هذا الدين مرتبط بفاتورة. احذف الفاتورة بدلًا من ذلك.", 400);
@@ -50,7 +50,7 @@ export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   const { notes, dueDate, reason, amount, currency } = await parseBody(req, patchSchema);
 
   const existing = await prisma.debt.findFirst({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     include: { payments: { select: { amount: true } } },
   });
   if (!existing) throw new ApiError("الدين غير موجود", 404);

@@ -25,7 +25,7 @@ export async function POST(
     const { id } = await params;
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
       select: { id: true, invoiceNumber: true },
     });
     if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
@@ -64,7 +64,7 @@ export async function POST(
       }
     }
 
-    const path = `${ctx.dbUser.id}/${id}.pdf`;
+    const path = `${ctx.ownerId}/${id}.pdf`;
     const buffer = Buffer.from(await file.arrayBuffer());
     const { error: uploadErr } = await supabase.storage
       .from(BUCKET)

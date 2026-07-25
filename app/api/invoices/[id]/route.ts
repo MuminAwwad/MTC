@@ -9,7 +9,7 @@ export const GET = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   try {
     const { id } = await params;
     const invoice = await prisma.invoice.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
       include: {
         customer: true,
         items: { include: { product: { select: { id: true, name: true, sku: true } } } },
@@ -35,7 +35,7 @@ export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
     const { status: newStatus, notes } = body;
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
       include: { items: true, debts: { where: { isDeleted: false } } },
     });
     if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
@@ -57,7 +57,7 @@ export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
         for (const item of invoice.items) {
           if (item.productId && item.qty > 0) {
             await issueStockFromInventory(tx, {
-              ownerId: ctx.dbUser.id,
+              ownerId: ctx.ownerId,
               userId: ctx.dbUser.id,
               productId: item.productId,
               qty: item.qty,
@@ -71,7 +71,7 @@ export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
         if (remaining > 0 && invoice.debts.length === 0) {
           await tx.debt.create({
             data: {
-              ownerId: ctx.dbUser.id,
+              ownerId: ctx.ownerId,
               customerId: invoice.customerId,
               invoiceId: invoice.id,
               amount: remaining,
@@ -102,7 +102,7 @@ export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
         for (const item of invoice.items) {
           if (item.productId && item.qty > 0) {
             await returnStockToInventory(tx, {
-              ownerId: ctx.dbUser.id,
+              ownerId: ctx.ownerId,
               userId: ctx.dbUser.id,
               productId: item.productId,
               qty: item.qty,
@@ -197,7 +197,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
     }
 
     const invoice = await prisma.invoice.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
       include: { items: true, debts: { where: { isDeleted: false }, include: { payments: true } } },
     });
     if (!invoice) return ok({ error: "الفاتورة غير موجودة" }, { status: 404 });
@@ -217,7 +217,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
         );
       }
       const target = await prisma.customer.findFirst({
-        where: { id: newCustomerId, ownerId: ctx.dbUser.id, isDeleted: false },
+        where: { id: newCustomerId, ownerId: ctx.ownerId, isDeleted: false },
         select: { id: true },
       });
       if (!target) return ok({ error: "العميل غير موجود" }, { status: 404 });
@@ -251,7 +251,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
         for (const old of invoice.items) {
           if (old.productId && old.qty > 0) {
             await returnStockToInventory(tx, {
-              ownerId: ctx.dbUser.id,
+              ownerId: ctx.ownerId,
               userId: ctx.dbUser.id,
               productId: old.productId,
               qty: old.qty,
@@ -282,7 +282,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
         for (const item of items) {
           if (item.productId && item.qty > 0) {
             await issueStockFromInventory(tx, {
-              ownerId: ctx.dbUser.id,
+              ownerId: ctx.ownerId,
               userId: ctx.dbUser.id,
               productId: item.productId,
               qty: item.qty,
@@ -327,7 +327,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
           // Bill went up after editing — open a fresh debt row.
           await tx.debt.create({
             data: {
-              ownerId: ctx.dbUser.id,
+              ownerId: ctx.ownerId,
               customerId: invoice.customerId,
               invoiceId: invoice.id,
               amount: newRemaining,
@@ -443,7 +443,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
 export const DELETE = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
   const deleted = await prisma.$transaction((tx) =>
-    softDeleteInvoice(tx, ctx.dbUser.id, ctx.dbUser.id, id)
+    softDeleteInvoice(tx, ctx.ownerId, ctx.dbUser.id, id)
   );
   if (!deleted) throw new ApiError("الفاتورة غير موجودة", 404);
   return ok({ success: true });

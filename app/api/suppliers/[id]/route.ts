@@ -13,7 +13,7 @@ const schema = z.object({
 export const GET = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
   const supplier = await prisma.supplier.findFirst({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     include: {
       products: { where: { isDeleted: false }, orderBy: { name: "asc" } },
       payables: {
@@ -41,7 +41,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
 
   if (normalizedPhone) {
     const existing = await prisma.supplier.findFirst({
-      where: { ownerId: ctx.dbUser.id, phone: normalizedPhone, isDeleted: false, NOT: { id } },
+      where: { ownerId: ctx.ownerId, phone: normalizedPhone, isDeleted: false, NOT: { id } },
       select: { id: true, name: true },
     });
     if (existing) {
@@ -53,7 +53,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   }
 
   const result = await prisma.supplier.updateMany({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     data: { ...data, phone: normalizedPhone },
   });
   if (result.count === 0) throw new ApiError("المورد غير موجود", 404);
@@ -65,7 +65,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
 export const DELETE = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
   const result = await prisma.supplier.updateMany({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     data: { isDeleted: true },
   });
   if (result.count === 0) throw new ApiError("المورد غير موجود", 404);

@@ -16,7 +16,7 @@ export const POST = withAuth<{ id: string }>(async (req, ctx, { params }) => {
 
   const result = await prisma.$transaction(async (tx) => {
     const product = await tx.product.findFirst({
-      where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { id, ownerId: ctx.ownerId, isDeleted: false },
       select: { id: true },
     });
     if (!product) throw new ApiError("المنتج غير موجود", 404);
@@ -32,7 +32,7 @@ export const POST = withAuth<{ id: string }>(async (req, ctx, { params }) => {
     const updated = await tx.product.findUnique({ where: { id }, select: { stockQty: true } });
     const movement = await tx.stockMovement.create({
       data: {
-        ownerId: ctx.dbUser.id,
+        ownerId: ctx.ownerId,
         productId: id,
         type,
         qty,

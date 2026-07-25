@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ok } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 export async function GET() {
-  const ctx = await requireUser();
+  const ctx = await requireAdmin();
   if (ctx instanceof NextResponse) return ctx;
 
   try {
     const categories = await prisma.expenseCategory.findMany({
-      where: { ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { ownerId: ctx.ownerId, isDeleted: false },
       orderBy: { name: "asc" },
     });
     return ok(categories);
@@ -20,7 +20,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const ctx = await requireUser();
+  const ctx = await requireAdmin();
   if (ctx instanceof NextResponse) return ctx;
 
   try {
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     const existing = await prisma.expenseCategory.findFirst({
       where: {
-        ownerId: ctx.dbUser.id,
+        ownerId: ctx.ownerId,
         name: { equals: normalized, mode: "insensitive" },
         isDeleted: false,
       },
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
     const cat = await prisma.expenseCategory.create({
       data: {
-        ownerId: ctx.dbUser.id,
+        ownerId: ctx.ownerId,
         name: normalized,
         icon: icon || null,
         color: color || null,

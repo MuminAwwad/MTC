@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       return ok({ error: "العملية غير صالحة" }, { status: 400 });
     }
 
-    const result = await commitAction(ctx.dbUser.id, ctx.dbUser.id, action);
+    const result = await commitAction(ctx.ownerId, ctx.dbUser.id, action);
     if ("error" in result) {
       return ok({ error: result.error }, { status: 400 });
     }

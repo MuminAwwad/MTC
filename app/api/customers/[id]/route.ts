@@ -14,13 +14,13 @@ export const GET = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
 
   const customer = await prisma.customer.findFirst({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
   });
   if (!customer) throw new ApiError("العميل غير موجود", 404);
 
   const [invoices, tickets, debts, spentAgg] = await Promise.all([
     prisma.invoice.findMany({
-      where: { customerId: id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { customerId: id, ownerId: ctx.ownerId, isDeleted: false },
       orderBy: { createdAt: "desc" },
       take: 20,
       select: {
@@ -35,7 +35,7 @@ export const GET = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
       },
     }),
     prisma.maintenanceTicket.findMany({
-      where: { customerId: id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { customerId: id, ownerId: ctx.ownerId, isDeleted: false },
       orderBy: { createdAt: "desc" },
       take: 20,
       select: {
@@ -53,7 +53,7 @@ export const GET = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
       },
     }),
     prisma.debt.findMany({
-      where: { customerId: id, ownerId: ctx.dbUser.id, isDeleted: false },
+      where: { customerId: id, ownerId: ctx.ownerId, isDeleted: false },
       orderBy: { createdAt: "desc" },
       include: {
         payments: { orderBy: { paidAt: "desc" } },
@@ -63,7 +63,7 @@ export const GET = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
     prisma.invoice.aggregate({
       where: {
         customerId: id,
-        ownerId: ctx.dbUser.id,
+        ownerId: ctx.ownerId,
         status: { in: ["PAID", "PARTIAL", "ISSUED"] },
         isDeleted: false,
       },
@@ -100,7 +100,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
 
   if (normalizedPhone) {
     const existing = await prisma.customer.findFirst({
-      where: { ownerId: ctx.dbUser.id, phone: normalizedPhone, isDeleted: false, NOT: { id } },
+      where: { ownerId: ctx.ownerId, phone: normalizedPhone, isDeleted: false, NOT: { id } },
       select: { id: true, name: true },
     });
     if (existing) {
@@ -114,7 +114,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
   // updateMany lets us include ownerId in the WHERE so users can't edit
   // another shop's customer by guessing the id.
   const result = await prisma.customer.updateMany({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     data: { ...data, phone: normalizedPhone },
   });
   if (result.count === 0) throw new ApiError("العميل غير موجود", 404);
@@ -126,7 +126,7 @@ export const PUT = withAuth<{ id: string }>(async (req, ctx, { params }) => {
 export const DELETE = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
   const { id } = await params;
   const result = await prisma.customer.updateMany({
-    where: { id, ownerId: ctx.dbUser.id, isDeleted: false },
+    where: { id, ownerId: ctx.ownerId, isDeleted: false },
     data: { isDeleted: true },
   });
   if (result.count === 0) throw new ApiError("العميل غير موجود", 404);
