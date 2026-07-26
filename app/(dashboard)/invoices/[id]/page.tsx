@@ -29,6 +29,7 @@ interface InvoiceDetail {
   notes: string | null;
   createdAt: string;
   customer: { id: string; name: string; phone: string | null; address: string | null };
+  createdBy: { id: string; name: string } | null;
   items: Array<{
     id: string;
     name: string;
@@ -231,12 +232,15 @@ export default function InvoiceDetailPage() {
         <span className="text-sm font-medium text-[#1e293b]">
           الحالة: <StatusBadge status={{ type: "invoice", status: invoice.status }} />
         </span>
-        <span className="text-sm text-[#64748b] mr-auto">
+        <span className="text-sm text-[#64748b]">
           العميل:{" "}
           <Link href={`/customers/${invoice.customer.id}`} className="text-[#104e98] hover:underline">
             {invoice.customer.name}
           </Link>
         </span>
+        {invoice.createdBy && (
+          <span className="text-sm text-[#64748b] mr-auto">أصدرها: {invoice.createdBy.name}</span>
+        )}
       </div>
 
       {/* Items table */}

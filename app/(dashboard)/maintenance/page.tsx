@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Wrench, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   PageHeader,
   SearchInput,
@@ -51,13 +52,25 @@ const STATUSES: Array<{ value: TicketStatus | ""; label: string }> = [
 ];
 
 export default function MaintenancePage() {
+  return (
+    <Suspense>
+      <MaintenancePageContent />
+    </Suspense>
+  );
+}
+
+function MaintenancePageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tickets, setTickets] = useState<TicketRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<TicketStatus | "">("");
+  const [openOnly, setOpenOnly] = useState(searchParams.get("open") === "true");
+  const [dateFrom, setDateFrom] = useState(searchParams.get("dateFrom") ?? "");
+  const [dateTo, setDateTo] = useState(searchParams.get("dateTo") ?? "");
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -66,6 +79,9 @@ export default function MaintenancePage() {
       page: page.toString(),
       search,
       ...(status ? { status } : {}),
+      ...(openOnly ? { open: "true" } : {}),
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
     });
     const res = await fetch(`/api/tickets?${params}`);
     if (res.ok) {
@@ -75,10 +91,10 @@ export default function MaintenancePage() {
       setTotalPages(data.pageCount);
     }
     setLoading(false);
-  }, [page, search, status]);
+  }, [page, search, status, openOnly, dateFrom, dateTo]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setPage(1); }, [search, status]);
+  useEffect(() => { setPage(1); }, [search, status, openOnly, dateFrom, dateTo]);
 
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
@@ -100,7 +116,7 @@ export default function MaintenancePage() {
         subtitle={`${total} تذكرة`}
         action={
           <div className="flex gap-2 flex-wrap">
-            <ExportMenu type="tickets" params={{ search, status }} />
+            <ExportMenu type="tickets" params={{ search, status, dateFrom, dateTo }} />
             <Link href="/maintenance/new">
               <Button className="gap-2"><Plus className="h-4 w-4" />تذكرة جديدة</Button>
             </Link>
@@ -113,17 +129,38 @@ export default function MaintenancePage() {
       <div className="flex flex-wrap gap-3 items-center">
         <SearchInput onSearch={setSearch} placeholder="بحث برقم التذكرة أو العميل أو الجهاز..." className="w-72" />
         <div className="flex gap-1 bg-[#f1f5f9] rounded-lg p-1 overflow-x-auto">
+          <button
+            onClick={() => { setOpenOnly(true); setStatus(""); }}
+            className={`px-3 py-1.5 text-xs rounded-md font-medium whitespace-nowrap transition-all ${
+              openOnly ? "bg-white text-[#104e98] shadow-sm" : "text-[#64748b] hover:text-[#1e293b]"
+            }`}
+          >
+            المفتوحة
+          </button>
           {STATUSES.map((s) => (
             <button
               key={s.value}
-              onClick={() => setStatus(s.value)}
+              onClick={() => { setStatus(s.value); setOpenOnly(false); }}
               className={`px-3 py-1.5 text-xs rounded-md font-medium whitespace-nowrap transition-all ${
-                status === s.value ? "bg-white text-[#104e98] shadow-sm" : "text-[#64748b] hover:text-[#1e293b]"
+                !openOnly && status === s.value ? "bg-white text-[#104e98] shadow-sm" : "text-[#64748b] hover:text-[#1e293b]"
               }`}
             >
               {s.label}
             </button>
           ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" dir="ltr" />
+          <span className="text-[#94a3b8] text-sm">إلى</span>
+          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" dir="ltr" />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(""); setDateTo(""); }}
+              className="text-xs text-[#64748b] hover:text-[#1e293b] underline"
+            >
+              مسح التاريخ
+            </button>
+          )}
         </div>
       </div>
 

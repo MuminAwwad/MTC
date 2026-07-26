@@ -60,6 +60,7 @@ interface TicketDetail {
   deliveredAt: string | null;
   createdAt: string;
   customer: { id: string; name: string; phone: string | null; address: string | null };
+  createdBy: { id: string; name: string } | null;
   parts: TicketPart[];
   timeline: TimelineEntry[];
   invoice: { id: string; invoiceNumber: string; status: string } | null;
@@ -423,6 +424,9 @@ export default function TicketDetailPage() {
               {ticket.customer.name}
             </Link>
             {ticket.customer.phone && <p className="text-sm text-[#64748b] ltr mt-1">{ticket.customer.phone}</p>}
+            {ticket.createdBy && (
+              <p className="text-sm text-[#64748b] mt-2 pt-2 border-t border-[#f1f5f9]">استلمها: {ticket.createdBy.name}</p>
+            )}
           </SectionCard>
 
           {/* Problem description */}

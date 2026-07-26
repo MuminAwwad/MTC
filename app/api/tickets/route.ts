@@ -18,7 +18,10 @@ export async function GET(req: NextRequest) {
     const priority = searchParams.get("priority") as TicketPriority | null;
     const customerId = searchParams.get("customerId") ?? "";
     const unbilled = searchParams.get("unbilled") === "true";
+    const open = searchParams.get("open") === "true";
     const all = searchParams.get("all") === "true";
+    const dateFrom = searchParams.get("dateFrom");
+    const dateTo = searchParams.get("dateTo");
 
     const where = {
       ownerId: ctx.ownerId,
@@ -27,6 +30,7 @@ export async function GET(req: NextRequest) {
       ...(priority ? { priority } : {}),
       ...(customerId ? { customerId } : {}),
       ...(unbilled ? { invoice: { is: null } } : {}),
+      ...(open ? { status: { notIn: ["DELIVERED", "CANCELLED", "UNREPAIRABLE"] as TicketStatus[] } } : {}),
       ...(search
         ? {
             OR: [
@@ -35,6 +39,14 @@ export async function GET(req: NextRequest) {
               { deviceBrand: { contains: search, mode: "insensitive" as const } },
               { deviceModel: { contains: search, mode: "insensitive" as const } },
             ],
+          }
+        : {}),
+      ...(dateFrom || dateTo
+        ? {
+            createdAt: {
+              ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+              ...(dateTo ? { lte: new Date(dateTo + "T23:59:59") } : {}),
+            },
           }
         : {}),
     };

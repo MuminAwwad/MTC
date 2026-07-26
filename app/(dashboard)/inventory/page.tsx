@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { Plus, LayoutGrid, List, AlertTriangle, Package, Sparkles, Trash2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Plus, LayoutGrid, List, AlertTriangle, Package, Sparkles, Trash2, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -41,6 +42,15 @@ interface ProductsResponse {
 }
 
 export default function InventoryPage() {
+  return (
+    <Suspense>
+      <InventoryPageContent />
+    </Suspense>
+  );
+}
+
+function InventoryPageContent() {
+  const searchParams = useSearchParams();
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [meta, setMeta] = useState<Omit<ProductsResponse, "data">>({
     total: 0, page: 1, limit: 20, totalPages: 0, lowStockCount: 0,
@@ -50,8 +60,14 @@ export default function InventoryPage() {
   const [view, setView] = useState<"grid" | "list">("list");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [lowStockFilter, setLowStockFilter] = useState(false);
+  const [lowStockFilter, setLowStockFilter] = useState(searchParams.get("lowStock") === "true");
   const [page, setPage] = useState(1);
+  const initialValueView = searchParams.get("valueView");
+  const [valueView, setValueView] = useState<"" | "cost" | "sell">(
+    initialValueView === "cost" || initialValueView === "sell" ? initialValueView : ""
+  );
+  const [valueProducts, setValueProducts] = useState<ProductRow[]>([]);
+  const [valueLoading, setValueLoading] = useState(false);
   const [adjustProduct, setAdjustProduct] = useState<ProductRow | null>(null);
   const [deleteProduct, setDeleteProduct] = useState<ProductRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -65,6 +81,20 @@ export default function InventoryPage() {
       .then((user) => setIsAdmin(user?.role === "ADMIN"))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!valueView || !isAdmin) return;
+    setValueLoading(true);
+    const params = new URLSearchParams({
+      all: "true",
+      search,
+      ...(categoryFilter !== "all" ? { categoryId: categoryFilter } : {}),
+    });
+    fetch(`/api/products?${params}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: ProductRow[]) => setValueProducts(Array.isArray(data) ? data : []))
+      .finally(() => setValueLoading(false));
+  }, [valueView, isAdmin, search, categoryFilter]);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -106,6 +136,14 @@ export default function InventoryPage() {
     setDeleteProduct(null);
     loadProducts();
   };
+
+  const valueRows = valueView
+    ? valueProducts
+        .filter((p) => !lowStockFilter || p.stockQty <= p.minStockQty)
+        .map((p) => ({ product: p, value: p.stockQty * Number(valueView === "cost" ? p.costPrice : p.sellPrice) }))
+        .sort((a, b) => b.value - a.value)
+    : [];
+  const valueTotal = valueRows.reduce((s, r) => s + r.value, 0);
 
   const handleStockSuccess = (productId: string, newQty: number) => {
     setProducts((prev) =>
@@ -181,6 +219,26 @@ export default function InventoryPage() {
             ناقص ({meta.lowStockCount})
           </button>
 
+          {isAdmin && (
+            <div className="flex gap-1 bg-[#f1f5f9] rounded-lg p-1">
+              {([
+                { value: "", label: "الكل" },
+                { value: "cost", label: "قيمة التكلفة" },
+                { value: "sell", label: "قيمة البيع" },
+              ] as const).map((o) => (
+                <button
+                  key={o.value}
+                  onClick={() => setValueView(o.value)}
+                  className={`px-3 py-1.5 text-xs rounded-md font-medium whitespace-nowrap transition-all ${
+                    valueView === o.value ? "bg-white text-[#104e98] shadow-sm" : "text-[#64748b] hover:text-[#1e293b]"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex border border-[#e2e8f0] rounded-lg overflow-hidden">
             <button
               onClick={() => setView("list")}
@@ -198,7 +256,61 @@ export default function InventoryPage() {
         </div>
       </SectionCard>
 
-      {loading ? (
+      {valueView && isAdmin ? (
+        <SectionCard noPadding>
+          <div className="flex items-center justify-between p-4 border-b border-[#e2e8f0]">
+            <span className="text-sm text-[#64748b]">
+              {valueView === "cost" ? "إجمالي قيمة التكلفة" : "إجمالي قيمة البيع"} ({valueRows.length} منتج)
+            </span>
+            <span className="text-lg font-bold text-[#0b2345] flex items-center gap-1.5">
+              <Coins className="h-4 w-4 text-teal-600" />
+              ₪{valueTotal.toFixed(2)}
+            </span>
+          </div>
+          {valueLoading ? (
+            <div className="p-4 space-y-2">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-10 rounded-lg bg-[#f8fafc] animate-pulse" />
+              ))}
+            </div>
+          ) : valueRows.length === 0 ? (
+            <EmptyState icon={Package} title="لا توجد منتجات" description="لا توجد نتائج مطابقة" />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#e2e8f0]">
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">المنتج</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">الكمية</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">
+                      {valueView === "cost" ? "سعر التكلفة" : "سعر البيع"}
+                    </th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">القيمة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {valueRows.map(({ product: p, value }) => (
+                    <tr key={p.id} className="border-b border-[#f8fafc] hover:bg-[#fafbfc] transition-colors">
+                      <td className="px-4 py-3">
+                        <Link href={`/inventory/${p.id}`} className="font-medium text-[#1e293b] hover:text-[#104e98]">
+                          {p.name}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-[#64748b]">{p.stockQty}</td>
+                      <td className="px-4 py-3">
+                        <CurrencyDisplay amount={Number(valueView === "cost" ? p.costPrice : p.sellPrice)} size="sm" />
+                      </td>
+                      <td className="px-4 py-3 font-medium">
+                        <CurrencyDisplay amount={value} size="sm" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+      ) : loading ? (
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="bg-white rounded-xl border border-[#e2e8f0] h-16 animate-pulse" />

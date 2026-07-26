@@ -5,6 +5,12 @@ import { formatCurrency } from "@/lib/formatters";
 import prisma from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 
+// Local YYYY-MM-DD — avoid toISOString(), which shifts by the server's UTC
+// offset and can land on the wrong day.
+function toISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 async function getStats(ownerId: string) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -95,6 +101,10 @@ export async function DashboardStats() {
   };
   let isAdmin = false;
 
+  const today = new Date();
+  const todayStr = toISODate(today);
+  const monthStartStr = toISODate(new Date(today.getFullYear(), today.getMonth(), 1));
+
   try {
     const ctx = await requireUser();
     if (!(ctx instanceof NextResponse)) {
@@ -113,6 +123,7 @@ export async function DashboardStats() {
         value={formatCurrency(stats.todayRevenue)}
         iconColor="text-[#104e98]"
         iconBg="bg-[#e8f0fc]"
+        href={`/invoices?dateFrom=${todayStr}&dateTo=${todayStr}`}
       />
       <StatCard
         icon={Wrench}
@@ -120,6 +131,7 @@ export async function DashboardStats() {
         value={stats.openTickets}
         iconColor="text-orange-600"
         iconBg="bg-orange-100"
+        href="/maintenance?open=true"
       />
       <StatCard
         icon={Package}
@@ -127,6 +139,7 @@ export async function DashboardStats() {
         value={stats.lowStockCount}
         iconColor={stats.lowStockCount > 0 ? "text-red-600" : "text-green-600"}
         iconBg={stats.lowStockCount > 0 ? "bg-red-100" : "bg-green-100"}
+        href="/inventory?lowStock=true"
       />
       <StatCard
         icon={CreditCard}
@@ -134,6 +147,7 @@ export async function DashboardStats() {
         value={formatCurrency(stats.totalDebt)}
         iconColor="text-yellow-600"
         iconBg="bg-yellow-100"
+        href="/debts"
       />
       {isAdmin && (
         <StatCard
@@ -142,6 +156,7 @@ export async function DashboardStats() {
           value={formatCurrency(stats.monthTicketProfit)}
           iconColor="text-teal-600"
           iconBg="bg-teal-100"
+          href={`/maintenance?dateFrom=${monthStartStr}&dateTo=${todayStr}`}
         />
       )}
       {isAdmin && (
@@ -151,6 +166,7 @@ export async function DashboardStats() {
           value={formatCurrency(stats.stockCostValue)}
           iconColor="text-purple-600"
           iconBg="bg-purple-100"
+          href="/inventory?valueView=cost"
         />
       )}
       {isAdmin && (
@@ -160,6 +176,7 @@ export async function DashboardStats() {
           value={formatCurrency(stats.stockSellValue)}
           iconColor="text-green-600"
           iconBg="bg-green-100"
+          href="/inventory?valueView=sell"
         />
       )}
     </div>

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   PageHeader,
   SearchInput,
@@ -44,13 +45,24 @@ const STATUSES: Array<{ value: InvoiceStatus | ""; label: string }> = [
 ];
 
 export default function InvoicesPage() {
+  return (
+    <Suspense>
+      <InvoicesPageContent />
+    </Suspense>
+  );
+}
+
+function InvoicesPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<InvoiceStatus | "">("");
+  const [dateFrom, setDateFrom] = useState(searchParams.get("dateFrom") ?? "");
+  const [dateTo, setDateTo] = useState(searchParams.get("dateTo") ?? "");
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({ total: 0, paid: 0, remaining: 0 });
 
@@ -60,6 +72,8 @@ export default function InvoicesPage() {
       page: page.toString(),
       search,
       ...(status ? { status } : {}),
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
     });
     const res = await fetch(`/api/invoices?${params}`);
     if (res.ok) {
@@ -70,10 +84,10 @@ export default function InvoicesPage() {
       setSummary(data.summary);
     }
     setLoading(false);
-  }, [page, search, status]);
+  }, [page, search, status, dateFrom, dateTo]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setPage(1); }, [search, status]);
+  useEffect(() => { setPage(1); }, [search, status, dateFrom, dateTo]);
 
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
@@ -90,7 +104,7 @@ export default function InvoicesPage() {
         subtitle={`${total} فاتورة`}
         action={
           <div className="flex gap-2 flex-wrap">
-            <ExportMenu type="invoices" params={{ search, status }} />
+            <ExportMenu type="invoices" params={{ search, status, dateFrom, dateTo }} />
             <Link href="/invoices/new">
               <Button className="gap-2"><Plus className="h-4 w-4" />فاتورة جديدة</Button>
             </Link>
@@ -121,6 +135,19 @@ export default function InvoicesPage() {
               {s.label}
             </button>
           ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" dir="ltr" />
+          <span className="text-[#94a3b8] text-sm">إلى</span>
+          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" dir="ltr" />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(""); setDateTo(""); }}
+              className="text-xs text-[#64748b] hover:text-[#1e293b] underline"
+            >
+              مسح التاريخ
+            </button>
+          )}
         </div>
       </div>
 

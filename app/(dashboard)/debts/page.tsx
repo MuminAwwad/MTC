@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { CreditCard, Clock, AlertCircle, CheckCircle2, Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,12 +36,21 @@ const STATUSES: Array<{ value: DebtStatus | ""; label: string }> = [
 ];
 
 export default function DebtsPage() {
+  return (
+    <Suspense>
+      <DebtsPageContent />
+    </Suspense>
+  );
+}
+
+function DebtsPageContent() {
+  const searchParams = useSearchParams();
   const [debts, setDebts] = useState<DebtRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<DebtStatus | "">("");
+  const [status, setStatus] = useState<DebtStatus | "">((searchParams.get("status") ?? "") as DebtStatus | "");
   const [outstanding, setOutstanding] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
