@@ -74,6 +74,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         leftover -= apply;
       }
 
+      await tx.invoicePayment.create({
+        data: { invoiceId: id, amount: payment, note: note ?? null, createdById: ctx.dbUser.id },
+      });
+
       return inv;
     });
 

@@ -582,6 +582,11 @@ const ACTIONS: ActionToolDef[] = [
                 });
               }
             }
+            if (paid > 0) {
+              await tx.invoicePayment.create({
+                data: { invoiceId: created.id, amount: paid, note: "دفعة عند إصدار الفاتورة", createdById: userId },
+              });
+            }
             if (remaining > 0) {
               await tx.debt.create({
                 data: { ownerId, customerId: p.customerId as string, invoiceId: created.id, amount: remaining, currency, reason: `فاتورة ${created.invoiceNumber}`, status: "PENDING" },

@@ -108,6 +108,7 @@ model User {
   createdExpenses Expense[]
   debtPayments    DebtPayment[]
   payablePayments PayablePayment[]
+  invoicePayments InvoicePayment[]
 
   // Per-shop ownership. Every domain row points back at exactly one shop
   // owner; queries scoped by ownerId give the owner and their employees a
@@ -287,7 +288,8 @@ model Invoice {
   ticketId String?            @unique
   ticket   MaintenanceTicket? @relation("TicketInvoice", fields: [ticketId], references: [id], onDelete: SetNull)
 
-  debts Debt[]
+  debts    Debt[]
+  payments InvoicePayment[]
 
   @@unique([ownerId, invoiceNumber])
   @@index([ownerId])
@@ -314,6 +316,21 @@ model InvoiceItem {
   total     Decimal  @db.Decimal(10, 2)
 
   source InvoiceItemSource @default(SALE)
+}
+
+// ─── InvoicePayment ───────────────────────────────────────────────────────────
+
+model InvoicePayment {
+  id        String  @id @default(cuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  amount Decimal @db.Decimal(10, 2)
+  note   String?
+
+  paidAt      DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
 }
 
 // ─── MaintenanceTicket ────────────────────────────────────────────────────────

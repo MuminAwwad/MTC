@@ -17,6 +17,10 @@ export const GET = withAuth<{ id: string }>(async (req, ctx, { params }) => {
           where: { isDeleted: false },
           include: { payments: true },
         },
+        payments: {
+          orderBy: { paidAt: "desc" },
+          include: { createdBy: { select: { id: true, name: true } } },
+        },
         createdBy: { select: { id: true, name: true } },
       },
     });

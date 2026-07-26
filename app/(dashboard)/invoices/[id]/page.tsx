@@ -49,6 +49,13 @@ interface InvoiceDetail {
     createdAt: string;
     payments: Array<{ id: string; amount: number; paidAt: string; note: string | null }>;
   }>;
+  payments: Array<{
+    id: string;
+    amount: number;
+    note: string | null;
+    paidAt: string;
+    createdBy: { id: string; name: string } | null;
+  }>;
 }
 
 export default function InvoiceDetailPage() {
@@ -370,20 +377,18 @@ export default function InvoiceDetailPage() {
         </SectionCard>
       )}
 
-      {/* Payment history — aggregated across all linked debts/installments */}
+      {/* Payment history — every payment recorded against this invoice */}
       {(() => {
-        const allPayments = invoice.debts
-          .flatMap((d) => d.payments)
-          .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
-        if (allPayments.length === 0) return null;
+        if (invoice.payments.length === 0) return null;
         return (
           <SectionCard title="سجل الدفعات">
             <ul className="divide-y divide-[#f1f5f9]">
-              {allPayments.map((p) => (
+              {invoice.payments.map((p) => (
                 <li key={p.id} className="flex items-center justify-between py-2.5 text-sm">
                   <div>
                     <span className="font-medium text-[#1e293b] ltr">₪{Number(p.amount).toFixed(2)}</span>
                     {p.note && <span className="text-[#64748b] mr-2">{p.note}</span>}
+                    {p.createdBy && <span className="text-[#94a3b8] mr-2">— {p.createdBy.name}</span>}
                   </div>
                   <span className="text-[#94a3b8]">{formatDateTime(p.paidAt)}</span>
                 </li>

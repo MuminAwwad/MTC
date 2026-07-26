@@ -287,6 +287,17 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        if (paid > 0) {
+          await tx.invoicePayment.create({
+            data: {
+              invoiceId: created.id,
+              amount: paid,
+              note: "دفعة عند إصدار الفاتورة",
+              createdById: ctx.dbUser.id,
+            },
+          });
+        }
+
         if (remaining > 0) {
           // Installment sale: split the remaining balance across the provided
           // due dates as separate linked debts. Otherwise a single debt.
