@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Edit, Phone, MapPin, FileText, Wrench, CreditCard,
-  CheckCircle2, Clock, TrendingUp, Save, X,
+  CheckCircle2, Clock, TrendingUp, Save, X, Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -181,6 +181,11 @@ export default function CustomerDetailPage() {
               <>
                 <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
                   <Edit className="h-4 w-4" /> تعديل
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/statement/customers/${id}`} target="_blank">
+                    <Printer className="h-4 w-4" /> كشف حساب
+                  </Link>
                 </Button>
                 <Button asChild size="sm">
                   <Link href={`/invoices/new?customerId=${id}`}>
