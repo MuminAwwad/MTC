@@ -36,6 +36,7 @@ interface InvoiceDetail {
     unitPrice: number;
     discount: number;
     total: number;
+    costPrice: number | null;
     product: { id: string; name: string; sku: string | null } | null;
   }>;
   debts: Array<{
@@ -72,6 +73,14 @@ export default function InvoiceDetailPage() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch("/api/users/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => setIsAdmin(user?.role === "ADMIN"))
+      .catch(() => {});
+  }, []);
 
   const changeStatus = async (newStatus: InvoiceStatus) => {
     setActionLoading(true);
@@ -131,6 +140,10 @@ export default function InvoiceDetailPage() {
 
   if (loading) return <LoadingSkeleton />;
   if (!invoice) return <div className="text-center py-20 text-[#64748b]">الفاتورة غير موجودة</div>;
+
+  // Profit per line = what it sold for minus its cost basis; lines with no
+  // recorded cost (older items, labor) count their full total as profit.
+  const profit = invoice.items.reduce((s, it) => s + Number(it.total) - Number(it.costPrice ?? 0) * it.qty, 0);
 
   const canIssue = invoice.status === "DRAFT";
   const canPay = ["ISSUED", "PARTIAL"].includes(invoice.status);
@@ -294,6 +307,12 @@ export default function InvoiceDetailPage() {
               <div className="flex justify-between text-orange-600 font-medium">
                 <dt>المتبقي</dt>
                 <dd className="ltr">₪{Number(invoice.remainingAmount).toFixed(2)}</dd>
+              </div>
+            )}
+            {isAdmin && (
+              <div className={`flex justify-between pt-2 border-t border-[#e2e8f0] font-medium ${profit < 0 ? "text-red-600" : "text-green-600"}`}>
+                <dt>الربح</dt>
+                <dd className="ltr">₪{profit.toFixed(2)}</dd>
               </div>
             )}
           </dl>

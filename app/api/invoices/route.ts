@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
         include: {
           customer: { select: { id: true, name: true, phone: true } },
           _count: { select: { items: true } },
+          items: { select: { qty: true, total: true, costPrice: true } },
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * ITEMS_PER_PAGE,
@@ -67,8 +68,15 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
+    // Profit per line = what it sold for minus its cost basis; lines with no
+    // recorded cost (older items, labor) count their full total as profit.
+    const invoicesWithProfit = invoices.map(({ items, ...inv }) => {
+      const profit = items.reduce((s, it) => s + Number(it.total) - Number(it.costPrice ?? 0) * it.qty, 0);
+      return { ...inv, profit };
+    });
+
     return ok({
-      invoices,
+      invoices: invoicesWithProfit,
       total,
       page,
       pageCount: Math.ceil(total / ITEMS_PER_PAGE),

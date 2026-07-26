@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const dateFilter = { gte: fromDate, lte: toDate };
 
     if (type === "pl") {
-      const [revenue, expenses, debtPayments] = await Promise.all([
+      const [revenue, expenses, debtPayments, ticketsWithCost] = await Promise.all([
         prisma.invoice.aggregate({
           where: { ownerId, isDeleted: false, status: { in: ["PAID", "PARTIAL", "ISSUED"] }, createdAt: dateFilter },
           _sum: { total: true, paidAmount: true, remainingAmount: true },
@@ -35,11 +35,22 @@ export async function GET(req: NextRequest) {
           where: { paidAt: dateFilter, debt: { ownerId } },
           _sum: { amount: true },
         }),
+        prisma.maintenanceTicket.findMany({
+          where: { ownerId, isDeleted: false, finalCost: { not: null }, createdAt: dateFilter },
+          select: { finalCost: true, parts: { select: { qty: true, unitCost: true } } },
+        }),
       ]);
 
       const totalRevenue = Number(revenue._sum.total ?? 0);
       const totalExpenses = Number(expenses._sum.amount ?? 0);
       const netProfit = totalRevenue - totalExpenses;
+
+      // Ticket profit = final cost minus the cost of parts used; with no
+      // parts cost this naturally reduces to the full final cost as profit.
+      const ticketProfit = ticketsWithCost.reduce((sum, t) => {
+        const partsTotal = t.parts.reduce((s, p) => s + p.qty * Number(p.unitCost), 0);
+        return sum + (Number(t.finalCost) - partsTotal);
+      }, 0);
 
       return ok({
         type: "pl",
@@ -57,6 +68,7 @@ export async function GET(req: NextRequest) {
         debtCollected: Number(debtPayments._sum.amount ?? 0),
         netProfit,
         profitMargin: totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : "0",
+        ticketProfit: { total: ticketProfit, count: ticketsWithCost.length },
       });
     }
 
@@ -66,9 +78,17 @@ export async function GET(req: NextRequest) {
         include: {
           customer: { select: { id: true, name: true } },
           _count: { select: { items: true } },
+          items: { select: { qty: true, total: true, costPrice: true } },
         },
         orderBy: { createdAt: "desc" },
       });
+
+      // Profit per line = what it sold for minus its cost basis; lines with
+      // no recorded cost (older items, labor) count their full total as profit.
+      const totalProfit = invoices.reduce(
+        (sum, inv) => sum + inv.items.reduce((s, it) => s + Number(it.total) - Number(it.costPrice ?? 0) * it.qty, 0),
+        0
+      );
 
       const byDay: Record<string, { date: string; revenue: number; count: number }> = {};
       invoices.forEach((inv) => {
@@ -98,6 +118,7 @@ export async function GET(req: NextRequest) {
         summary: {
           total: invoices.reduce((s, i) => s + Number(i.total), 0),
           count: invoices.length,
+          profit: totalProfit,
         },
       });
     }

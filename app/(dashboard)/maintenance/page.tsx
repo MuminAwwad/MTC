@@ -36,6 +36,7 @@ interface TicketRow {
   createdAt: string;
   customer: { id: string; name: string; phone: string | null };
   _count: { parts: number; timeline: number };
+  profit: number | null;
 }
 
 const STATUSES: Array<{ value: TicketStatus | ""; label: string }> = [
@@ -77,6 +78,14 @@ export default function MaintenancePage() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setPage(1); }, [search, status]);
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch("/api/users/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => setIsAdmin(user?.role === "ADMIN"))
+      .catch(() => {});
+  }, []);
 
   const isOverdue = (t: TicketRow) =>
     t.estimatedDelivery &&
@@ -159,6 +168,14 @@ export default function MaintenancePage() {
                     <span>{formatDate(t.createdAt)}</span>
                   </div>
                 </div>
+                {isAdmin && t.profit !== null && (
+                  <div className="mt-2 pt-2 border-t border-[#f1f5f9] flex justify-between text-xs">
+                    <span className="text-[#64748b]">الربح</span>
+                    <span className={`font-medium ${t.profit < 0 ? "text-red-600" : "text-green-600"}`}>
+                      ₪{t.profit.toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -176,6 +193,7 @@ export default function MaintenancePage() {
                   <th className="text-right px-4 py-3 font-medium text-[#64748b]">الموعد</th>
                   <th className="text-right px-4 py-3 font-medium text-[#64748b]">تاريخ الاستلام</th>
                   <th className="text-right px-4 py-3 font-medium text-[#64748b]">الحالة</th>
+                  {isAdmin && <th className="text-right px-4 py-3 font-medium text-[#64748b]">الربح</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f1f5f9]">
@@ -218,6 +236,17 @@ export default function MaintenancePage() {
                     <td className="px-4 py-3">
                       <StatusBadge status={{ type: "ticket", status: t.status }} />
                     </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3">
+                        {t.profit !== null ? (
+                          <span className={`font-medium ltr ${t.profit < 0 ? "text-red-600" : "text-green-600"}`}>
+                            ₪{t.profit.toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="text-[#94a3b8]">—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

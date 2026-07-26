@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { StatCard } from "@/components/shared";
-import { TrendingUp, Wrench, Package, CreditCard, Boxes, Banknote } from "lucide-react";
+import { TrendingUp, Wrench, Package, CreditCard, Boxes, Banknote, Coins } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import prisma from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
@@ -10,8 +10,10 @@ async function getStats(ownerId: string) {
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
+  const monthStart = new Date(today);
+  monthStart.setDate(1);
 
-  const [todayInvoices, openTickets, lowStockCount, openDebts, stockValue] = await Promise.all([
+  const [todayInvoices, openTickets, lowStockCount, openDebts, stockValue, monthTickets] = await Promise.all([
     prisma.invoice.aggregate({
       where: {
         ownerId,
@@ -51,11 +53,23 @@ async function getStats(ownerId: string) {
       WHERE "isActive" = true AND "isDeleted" = false
       AND "ownerId" = ${ownerId}
     `,
+    prisma.maintenanceTicket.findMany({
+      where: { ownerId, isDeleted: false, finalCost: { not: null }, createdAt: { gte: monthStart } },
+      select: { finalCost: true, parts: { select: { qty: true, unitCost: true } } },
+    }),
   ]);
 
   const totalDebt = openDebts.reduce((sum, d) => {
     const paid = d.payments.reduce((s, p) => s + Number(p.amount), 0);
     return sum + Number(d.amount) - paid;
+  }, 0);
+
+  // Ticket profit = final cost minus the cost of parts used; with no parts
+  // cost this naturally reduces to the full final cost as profit. Same
+  // definition as the reports "ticketProfit" figure, scoped to this month.
+  const monthTicketProfit = monthTickets.reduce((sum, t) => {
+    const partsTotal = t.parts.reduce((s, p) => s + p.qty * Number(p.unitCost), 0);
+    return sum + (Number(t.finalCost) - partsTotal);
   }, 0);
 
   return {
@@ -65,6 +79,7 @@ async function getStats(ownerId: string) {
     totalDebt,
     stockCostValue: Number(stockValue[0]?.cost ?? 0),
     stockSellValue: Number(stockValue[0]?.sell ?? 0),
+    monthTicketProfit,
   };
 }
 
@@ -76,6 +91,7 @@ export async function DashboardStats() {
     totalDebt: 0,
     stockCostValue: 0,
     stockSellValue: 0,
+    monthTicketProfit: 0,
   };
   let isAdmin = false;
 
@@ -119,6 +135,15 @@ export async function DashboardStats() {
         iconColor="text-yellow-600"
         iconBg="bg-yellow-100"
       />
+      {isAdmin && (
+        <StatCard
+          icon={Coins}
+          label="أرباح الصيانة (هذا الشهر)"
+          value={formatCurrency(stats.monthTicketProfit)}
+          iconColor="text-teal-600"
+          iconBg="bg-teal-100"
+        />
+      )}
       {isAdmin && (
         <StatCard
           icon={Boxes}

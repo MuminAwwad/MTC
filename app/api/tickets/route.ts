@@ -45,6 +45,7 @@ export async function GET(req: NextRequest) {
         include: {
           customer: { select: { id: true, name: true, phone: true } },
           _count: { select: { parts: true, timeline: true } },
+          parts: { select: { qty: true, unitCost: true } },
         },
         orderBy: { createdAt: "desc" },
         ...(all ? {} : { skip: (page - 1) * ITEMS_PER_PAGE, take: ITEMS_PER_PAGE }),
@@ -52,7 +53,14 @@ export async function GET(req: NextRequest) {
       prisma.maintenanceTicket.count({ where }),
     ]);
 
-    return ok({ tickets, total, page, pageCount: Math.ceil(total / ITEMS_PER_PAGE) });
+    // Profit = final cost minus the cost of parts used; with no parts cost
+    // this naturally reduces to the full final cost being profit.
+    const ticketsWithProfit = tickets.map(({ parts, ...t }) => {
+      const partsTotal = parts.reduce((s, p) => s + p.qty * Number(p.unitCost), 0);
+      return { ...t, profit: t.finalCost !== null ? Number(t.finalCost) - partsTotal : null };
+    });
+
+    return ok({ tickets: ticketsWithProfit, total, page, pageCount: Math.ceil(total / ITEMS_PER_PAGE) });
   } catch (e) {
     console.error(e);
     return ok({ error: "خطأ في الخادم" }, { status: 500 });

@@ -135,6 +135,14 @@ export default function TicketDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch("/api/users/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => setIsAdmin(user?.role === "ADMIN"))
+      .catch(() => {});
+  }, []);
+
   const changeStatus = async (newStatus: TicketStatus) => {
     setStatusLoading(newStatus);
     setError("");
@@ -249,6 +257,9 @@ export default function TicketDetailPage() {
 
   const nextStatuses = NEXT_STATUSES[ticket.status];
   const partsTotal = ticket.parts.reduce((s, p) => s + Number(p.total), 0);
+  // Profit = what the ticket billed minus the cost of parts used. With no
+  // parts cost this naturally reduces to the full final cost being profit.
+  const profit = ticket.finalCost !== null ? Number(ticket.finalCost) - partsTotal : null;
   const currentFlowIndex = TICKET_FLOW.indexOf(ticket.status);
   const isTerminal = ticket.status === "DELIVERED" || ticket.status === "CANCELLED";
   const canEdit = !isTerminal;
@@ -486,6 +497,14 @@ export default function TicketDetailPage() {
                 <span className="text-[#64748b]">العربون المدفوع</span>
                 <span className="text-green-600">₪{Number(ticket.depositPaid).toFixed(2)}</span>
               </div>
+              {isAdmin && (
+                <div className="flex justify-between pt-2 border-t border-[#f1f5f9]">
+                  <span className="text-[#64748b]">الربح</span>
+                  <span className={`font-semibold ${profit !== null && profit < 0 ? "text-red-600" : "text-green-600"}`}>
+                    {profit !== null ? `₪${profit.toFixed(2)}` : "—"}
+                  </span>
+                </div>
+              )}
             </div>
           </SectionCard>
         </div>

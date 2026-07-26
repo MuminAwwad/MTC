@@ -33,6 +33,7 @@ function buildReportDataset(
       debtCollected: number;
       netProfit: number;
       profitMargin: string;
+      ticketProfit: { total: number; count: number };
     };
     return {
       title: "تقرير الأرباح والخسائر" + range,
@@ -51,6 +52,8 @@ function buildReportDataset(
         { item: "عدد المصاريف", value: d.expenses.count },
         { item: "صافي الربح", value: money(d.netProfit) },
         { item: "هامش الربح", value: `${d.profitMargin}%` },
+        { item: "أرباح تذاكر الصيانة", value: money(d.ticketProfit.total) },
+        { item: "عدد تذاكر الصيانة المكتملة", value: d.ticketProfit.count },
       ],
     };
   }
@@ -228,6 +231,7 @@ export default function ReportsPage() {
           debtCollected: number;
           netProfit: number;
           profitMargin: string;
+          ticketProfit: { total: number; count: number };
         };
         return (
           <div className="space-y-5">
@@ -237,7 +241,7 @@ export default function ReportsPage() {
               <StatCard label="صافي الربح" value={`₪${d.netProfit.toFixed(2)}`} icon={TrendingUp} iconColor={d.netProfit >= 0 ? "text-green-600" : "text-red-500"} iconBg={d.netProfit >= 0 ? "bg-green-50" : "bg-red-50"} />
               <StatCard label="هامش الربح" value={`${d.profitMargin}%`} icon={TrendingUp} />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <SectionCard title="تفاصيل الإيرادات">
                 <dl className="space-y-2 text-sm">
                   <div className="flex justify-between"><dt className="text-[#64748b]">إجمالي الفواتير</dt><dd className="font-medium">{d.revenue.invoiceCount} فاتورة</dd></div>
@@ -252,6 +256,12 @@ export default function ReportsPage() {
                   <div className="flex justify-between border-t border-[#f1f5f9] pt-2 mt-2"><dt className="font-semibold text-[#0b2345]">الإجمالي</dt><dd className="font-bold text-red-500 ltr">₪{d.expenses.total.toFixed(2)}</dd></div>
                 </dl>
               </SectionCard>
+              <SectionCard title="أرباح تذاكر الصيانة">
+                <dl className="space-y-2 text-sm">
+                  <div className="flex justify-between"><dt className="text-[#64748b]">تذاكر مكتملة التسعير</dt><dd className="font-medium">{d.ticketProfit.count} تذكرة</dd></div>
+                  <div className="flex justify-between border-t border-[#f1f5f9] pt-2 mt-2"><dt className="font-semibold text-[#0b2345]">الإجمالي</dt><dd className={`font-bold ltr ${d.ticketProfit.total >= 0 ? "text-green-600" : "text-red-500"}`}>₪{d.ticketProfit.total.toFixed(2)}</dd></div>
+                </dl>
+              </SectionCard>
             </div>
           </div>
         );
@@ -262,13 +272,14 @@ export default function ReportsPage() {
         const d = data as {
           byDay: Array<{ date: string; revenue: number; count: number }>;
           topCustomers: Array<{ id: string; name: string; revenue: number; count: number }>;
-          summary: { total: number; count: number };
+          summary: { total: number; count: number; profit: number };
         };
         return (
           <div className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <StatCard label="إجمالي المبيعات" value={`₪${d.summary.total.toFixed(2)}`} icon={TrendingUp} />
               <StatCard label="عدد الفواتير" value={d.summary.count} icon={ShoppingCart} />
+              <StatCard label="ربح المبيعات" value={`₪${d.summary.profit.toFixed(2)}`} icon={TrendingUp} iconColor={d.summary.profit >= 0 ? "text-green-600" : "text-red-500"} iconBg={d.summary.profit >= 0 ? "bg-green-50" : "bg-red-50"} />
             </div>
             <SectionCard title="المبيعات اليومية">
               <ResponsiveContainer width="100%" height={250}>

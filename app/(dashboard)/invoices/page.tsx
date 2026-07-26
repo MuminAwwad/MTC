@@ -31,6 +31,7 @@ interface InvoiceRow {
   createdAt: string;
   customer: { id: string; name: string; phone: string | null };
   _count: { items: number };
+  profit: number;
 }
 
 const STATUSES: Array<{ value: InvoiceStatus | ""; label: string }> = [
@@ -73,6 +74,14 @@ export default function InvoicesPage() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setPage(1); }, [search, status]);
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch("/api/users/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => setIsAdmin(user?.role === "ADMIN"))
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -163,6 +172,14 @@ export default function InvoicesPage() {
                     </dd>
                   </div>
                 </dl>
+                {isAdmin && (
+                  <div className="mt-2 pt-2 border-t border-[#f1f5f9] flex justify-between text-xs">
+                    <span className="text-[#64748b]">الربح</span>
+                    <span className={`font-medium ${inv.profit < 0 ? "text-red-600" : "text-green-600"}`}>
+                      ₪{inv.profit.toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -180,6 +197,7 @@ export default function InvoicesPage() {
                     <th className="text-right px-4 py-3 font-medium text-[#64748b]">المدفوع</th>
                     <th className="text-right px-4 py-3 font-medium text-[#64748b]">المتبقي</th>
                     <th className="text-right px-4 py-3 font-medium text-[#64748b]">الحالة</th>
+                    {isAdmin && <th className="text-right px-4 py-3 font-medium text-[#64748b]">الربح</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#f1f5f9]">
@@ -212,6 +230,11 @@ export default function InvoicesPage() {
                       <td className="px-4 py-3">
                         <StatusBadge status={{ type: "invoice", status: inv.status }} />
                       </td>
+                      {isAdmin && (
+                        <td className={`px-4 py-3 font-medium ${inv.profit < 0 ? "text-red-600" : "text-green-600"}`}>
+                          ₪{inv.profit.toFixed(2)}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
