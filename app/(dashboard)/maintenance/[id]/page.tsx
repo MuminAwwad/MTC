@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Printer, ChevronLeft, ChevronRight, Plus, Trash2,
-  CheckCircle2, Clock, Package, MessageSquare, FileText, Pencil,
+  CheckCircle2, Clock, Package, MessageSquare, FileText, Pencil, XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,13 +66,14 @@ interface TicketDetail {
 }
 
 const NEXT_STATUSES: Record<TicketStatus, TicketStatus[]> = {
-  RECEIVED: ["DIAGNOSING", "CANCELLED"],
-  DIAGNOSING: ["IN_REPAIR", "WAITING_PARTS", "READY", "CANCELLED"],
-  IN_REPAIR: ["WAITING_PARTS", "READY", "CANCELLED"],
-  WAITING_PARTS: ["IN_REPAIR", "READY", "CANCELLED"],
+  RECEIVED: ["DIAGNOSING", "CANCELLED", "UNREPAIRABLE"],
+  DIAGNOSING: ["IN_REPAIR", "WAITING_PARTS", "READY", "CANCELLED", "UNREPAIRABLE"],
+  IN_REPAIR: ["WAITING_PARTS", "READY", "CANCELLED", "UNREPAIRABLE"],
+  WAITING_PARTS: ["IN_REPAIR", "READY", "CANCELLED", "UNREPAIRABLE"],
   READY: ["DELIVERED", "CANCELLED"],
   DELIVERED: [],
   CANCELLED: [],
+  UNREPAIRABLE: [],
 };
 
 const STATUS_ICONS: Record<TicketStatus, React.ReactNode> = {
@@ -83,6 +84,7 @@ const STATUS_ICONS: Record<TicketStatus, React.ReactNode> = {
   READY: <CheckCircle2 className="h-4 w-4" />,
   DELIVERED: <CheckCircle2 className="h-4 w-4" />,
   CANCELLED: <Clock className="h-4 w-4" />,
+  UNREPAIRABLE: <XCircle className="h-4 w-4" />,
 };
 
 export default function TicketDetailPage() {
@@ -261,7 +263,8 @@ export default function TicketDetailPage() {
   // parts cost this naturally reduces to the full final cost being profit.
   const profit = ticket.finalCost !== null ? Number(ticket.finalCost) - partsTotal : null;
   const currentFlowIndex = TICKET_FLOW.indexOf(ticket.status);
-  const isTerminal = ticket.status === "DELIVERED" || ticket.status === "CANCELLED";
+  const isTerminal =
+    ticket.status === "DELIVERED" || ticket.status === "CANCELLED" || ticket.status === "UNREPAIRABLE";
   const canEdit = !isTerminal;
   // Delete is allowed in any status — for in-flight tickets the API restores
   // any parts that were drawn from stock. The linked invoice (if any) is
@@ -352,7 +355,7 @@ export default function TicketDetailPage() {
           {nextStatuses.length > 0 && (
             <div className="space-y-2">
               <div className="flex gap-2 flex-wrap">
-                {nextStatuses.filter((s) => s !== "CANCELLED").map((s) => (
+                {nextStatuses.filter((s) => s !== "CANCELLED" && s !== "UNREPAIRABLE").map((s) => (
                   <Button
                     key={s}
                     size="sm"
@@ -362,6 +365,17 @@ export default function TicketDetailPage() {
                     {statusLoading === s ? "..." : `→ ${TICKET_STATUS_LABELS[s]}`}
                   </Button>
                 ))}
+                {nextStatuses.includes("UNREPAIRABLE") && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-slate-600 border-slate-300 hover:bg-slate-50"
+                    onClick={() => changeStatus("UNREPAIRABLE")}
+                    disabled={!!statusLoading}
+                  >
+                    لا يمكن إصلاحه
+                  </Button>
+                )}
                 {nextStatuses.includes("CANCELLED") && (
                   <Button
                     size="sm"

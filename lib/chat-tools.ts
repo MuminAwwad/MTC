@@ -38,7 +38,7 @@ const TOOLS: ToolDefinition[] = [
           _sum: { total: true },
         }),
         prisma.maintenanceTicket.count({
-          where: { ownerId, status: { notIn: ["DELIVERED", "CANCELLED"] }, isDeleted: false },
+          where: { ownerId, status: { notIn: ["DELIVERED", "CANCELLED", "UNREPAIRABLE"] }, isDeleted: false },
         }),
         prisma.product.count({
           where: { ownerId, isActive: true, isDeleted: false, stockQty: { lte: 0 } },
@@ -345,14 +345,14 @@ const TOOLS: ToolDefinition[] = [
   {
     name: "get_open_tickets",
     description:
-      "Maintenance tickets that aren't delivered or cancelled yet. Useful for 'what repairs are still in the shop?'.",
+      "Maintenance tickets that aren't delivered, cancelled, or marked unrepairable yet. Useful for 'what repairs are still in the shop?'.",
     parameters: { type: "object", properties: {}, required: [] },
     execute: async (ownerId) => {
       const tickets = await prisma.maintenanceTicket.findMany({
         where: {
           ownerId,
           isDeleted: false,
-          status: { notIn: ["DELIVERED", "CANCELLED"] },
+          status: { notIn: ["DELIVERED", "CANCELLED", "UNREPAIRABLE"] },
         },
         orderBy: [{ priority: "desc" }, { receivedAt: "asc" }],
         take: 50,

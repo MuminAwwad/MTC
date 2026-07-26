@@ -47,6 +47,7 @@ const STATUSES: Array<{ value: TicketStatus | ""; label: string }> = [
   { value: "WAITING_PARTS", label: "انتظار قطع" },
   { value: "READY", label: "جاهز" },
   { value: "DELIVERED", label: "مُسلَّم" },
+  { value: "UNREPAIRABLE", label: "لا يمكن إصلاحه" },
 ];
 
 export default function MaintenancePage() {
@@ -90,7 +91,7 @@ export default function MaintenancePage() {
   const isOverdue = (t: TicketRow) =>
     t.estimatedDelivery &&
     new Date(t.estimatedDelivery) < new Date() &&
-    !["DELIVERED", "CANCELLED"].includes(t.status);
+    !["DELIVERED", "CANCELLED", "UNREPAIRABLE"].includes(t.status);
 
   return (
     <div className="space-y-6">

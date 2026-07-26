@@ -52,23 +52,25 @@ const CURRENCY_SYMBOLS: Record<string, string> = { ILS: "₪", USD: "$", JOD: "J
 const VALID_CURRENCIES = ["ILS", "USD", "JOD"];
 const DEVICE_TYPES = ["MOBILE", "LAPTOP", "DESKTOP", "TABLET", "OTHER"];
 const TICKET_STATUSES = [
-  "RECEIVED", "DIAGNOSING", "IN_REPAIR", "WAITING_PARTS", "READY", "DELIVERED", "CANCELLED",
+  "RECEIVED", "DIAGNOSING", "IN_REPAIR", "WAITING_PARTS", "READY", "DELIVERED", "CANCELLED", "UNREPAIRABLE",
 ];
 const TICKET_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"];
 
 const TICKET_STATUS_LABELS: Record<string, string> = {
   RECEIVED: "مستلم", DIAGNOSING: "تشخيص", IN_REPAIR: "قيد الإصلاح",
   WAITING_PARTS: "انتظار قطع", READY: "جاهز", DELIVERED: "مُسلَّم", CANCELLED: "ملغي",
+  UNREPAIRABLE: "لا يمكن إصلاحه",
 };
 
 const TICKET_TRANSITIONS: Record<string, string[]> = {
-  RECEIVED: ["DIAGNOSING", "CANCELLED"],
-  DIAGNOSING: ["IN_REPAIR", "WAITING_PARTS", "READY", "CANCELLED"],
-  IN_REPAIR: ["WAITING_PARTS", "READY", "CANCELLED"],
-  WAITING_PARTS: ["IN_REPAIR", "READY", "CANCELLED"],
+  RECEIVED: ["DIAGNOSING", "CANCELLED", "UNREPAIRABLE"],
+  DIAGNOSING: ["IN_REPAIR", "WAITING_PARTS", "READY", "CANCELLED", "UNREPAIRABLE"],
+  IN_REPAIR: ["WAITING_PARTS", "READY", "CANCELLED", "UNREPAIRABLE"],
+  WAITING_PARTS: ["IN_REPAIR", "READY", "CANCELLED", "UNREPAIRABLE"],
   READY: ["DELIVERED", "CANCELLED"],
   DELIVERED: [],
   CANCELLED: [],
+  UNREPAIRABLE: [],
 };
 
 const num = (v: unknown): number => {
@@ -971,7 +973,7 @@ const ACTIONS: ActionToolDef[] = [
   {
     name: "update_ticket_status",
     description:
-      "Move a maintenance ticket to a new status. Get the ticketId from find_ticket. Valid statuses: RECEIVED, DIAGNOSING, IN_REPAIR, WAITING_PARTS, READY, DELIVERED, CANCELLED (only legal transitions are allowed). Optional note.",
+      "Move a maintenance ticket to a new status. Get the ticketId from find_ticket. Valid statuses: RECEIVED, DIAGNOSING, IN_REPAIR, WAITING_PARTS, READY, DELIVERED, CANCELLED, UNREPAIRABLE (device cannot be fixed; only legal transitions are allowed). Optional note.",
     parameters: {
       type: "object",
       properties: {

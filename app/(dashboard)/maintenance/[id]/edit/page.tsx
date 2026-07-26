@@ -13,7 +13,7 @@ import {
   LoadingSkeleton,
   useToast,
 } from "@/components/shared";
-import { DEVICE_TYPE_LABELS } from "@/lib/constants";
+import { DEVICE_TYPE_LABELS, TICKET_STATUS_LABELS } from "@/lib/constants";
 import type { DeviceType, TicketPriority, TicketStatus } from "@prisma/client";
 
 const DEVICE_TYPES = Object.entries(DEVICE_TYPE_LABELS) as [DeviceType, string][];
@@ -161,7 +161,8 @@ export default function EditTicketPage() {
 
   if (!loaded) return <LoadingSkeleton />;
 
-  const isTerminal = loaded.status === "DELIVERED" || loaded.status === "CANCELLED";
+  const isTerminal =
+    loaded.status === "DELIVERED" || loaded.status === "CANCELLED" || loaded.status === "UNREPAIRABLE";
   // Customer is locked once an invoice is issued — repointing the ticket would
   // diverge from the device owner on the invoice.
   const customerLocked = !!loaded.invoice;
@@ -181,7 +182,7 @@ export default function EditTicketPage() {
       {isTerminal && (
         <div className="flex items-start gap-2 text-sm bg-red-50 border border-red-200 text-red-900 rounded-lg px-3 py-2">
           <span>
-            هذه التذكرة {loaded.status === "DELIVERED" ? "مُسلَّمة" : "ملغاة"}. لا يمكن تعديل بياناتها.
+            هذه التذكرة {TICKET_STATUS_LABELS[loaded.status]}. لا يمكن تعديل بياناتها.
           </span>
         </div>
       )}

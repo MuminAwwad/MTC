@@ -41,6 +41,7 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
   READY: "جاهز",
   DELIVERED: "مُسلَّم",
   CANCELLED: "ملغي",
+  UNREPAIRABLE: "لا يمكن إصلاحه",
 };
 
 export const TICKET_STATUS_COLORS: Record<TicketStatus, string> = {
@@ -51,6 +52,7 @@ export const TICKET_STATUS_COLORS: Record<TicketStatus, string> = {
   READY: "bg-green-100 text-green-700",
   DELIVERED: "bg-purple-100 text-purple-700",
   CANCELLED: "bg-red-100 text-red-700",
+  UNREPAIRABLE: "bg-slate-200 text-slate-700",
 };
 
 export const TICKET_PRIORITY_LABELS: Record<TicketPriority, string> = {

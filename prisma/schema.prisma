@@ -41,6 +41,7 @@ enum TicketStatus {
   READY
   DELIVERED
   CANCELLED
+  UNREPAIRABLE
 }
 
 enum TicketPriority {

@@ -5,13 +5,14 @@ import { withAuth, ApiError } from "@/lib/api-handler";
 import { softDeleteTicket } from "@/lib/services/tickets";
 
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  RECEIVED: ["DIAGNOSING", "CANCELLED"],
-  DIAGNOSING: ["IN_REPAIR", "WAITING_PARTS", "READY", "CANCELLED"],
-  IN_REPAIR: ["WAITING_PARTS", "READY", "CANCELLED"],
-  WAITING_PARTS: ["IN_REPAIR", "READY", "CANCELLED"],
+  RECEIVED: ["DIAGNOSING", "CANCELLED", "UNREPAIRABLE"],
+  DIAGNOSING: ["IN_REPAIR", "WAITING_PARTS", "READY", "CANCELLED", "UNREPAIRABLE"],
+  IN_REPAIR: ["WAITING_PARTS", "READY", "CANCELLED", "UNREPAIRABLE"],
+  WAITING_PARTS: ["IN_REPAIR", "READY", "CANCELLED", "UNREPAIRABLE"],
   READY: ["DELIVERED", "CANCELLED"],
   DELIVERED: [],
   CANCELLED: [],
+  UNREPAIRABLE: [],
 };
 
 export const GET = withAuth<{ id: string }>(async (req, ctx, { params }) => {
@@ -82,9 +83,12 @@ export const PATCH = withAuth<{ id: string }>(async (req, ctx, { params }) => {
       depositPaid,
     };
     const isIdentityEdit = Object.values(identityFields).some((v) => v !== undefined);
-    if (isIdentityEdit && (ticket.status === "DELIVERED" || ticket.status === "CANCELLED")) {
+    if (
+      isIdentityEdit &&
+      (ticket.status === "DELIVERED" || ticket.status === "CANCELLED" || ticket.status === "UNREPAIRABLE")
+    ) {
       return ok(
-        { error: "لا يمكن تعديل تذكرة مُسلَّمة أو ملغاة" },
+        { error: "لا يمكن تعديل تذكرة مُسلَّمة أو ملغاة أو غير قابلة للإصلاح" },
         { status: 400 }
       );
     }

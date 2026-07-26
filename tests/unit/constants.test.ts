@@ -22,8 +22,8 @@ describe("INVOICE_STATUS_LABELS", () => {
 });
 
 describe("TICKET_STATUS_LABELS", () => {
-  it("covers all 7 ticket statuses", () => {
-    const statuses = ["RECEIVED", "DIAGNOSING", "IN_REPAIR", "WAITING_PARTS", "READY", "DELIVERED", "CANCELLED"] as const;
+  it("covers all 8 ticket statuses", () => {
+    const statuses = ["RECEIVED", "DIAGNOSING", "IN_REPAIR", "WAITING_PARTS", "READY", "DELIVERED", "CANCELLED", "UNREPAIRABLE"] as const;
     statuses.forEach((s) => {
       expect(TICKET_STATUS_LABELS[s]).toBeTruthy();
     });
@@ -36,8 +36,9 @@ describe("TICKET_FLOW", () => {
     expect(TICKET_FLOW[TICKET_FLOW.length - 1]).toBe("DELIVERED");
   });
 
-  it("does not include CANCELLED (non-linear status)", () => {
+  it("does not include CANCELLED or UNREPAIRABLE (non-linear statuses)", () => {
     expect(TICKET_FLOW).not.toContain("CANCELLED");
+    expect(TICKET_FLOW).not.toContain("UNREPAIRABLE");
   });
 
   it("has correct order", () => {

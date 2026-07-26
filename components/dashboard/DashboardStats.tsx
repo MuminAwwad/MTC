@@ -26,7 +26,7 @@ async function getStats(ownerId: string) {
     prisma.maintenanceTicket.count({
       where: {
         ownerId,
-        status: { notIn: ["DELIVERED", "CANCELLED"] },
+        status: { notIn: ["DELIVERED", "CANCELLED", "UNREPAIRABLE"] },
         isDeleted: false,
       },
     }),
