@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sparkles, Upload, FileText, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageHeader, SectionCard, FormField, useToast } from "@/components/shared";
+import { PageHeader, SectionCard, FormField, SupplierSelector, useToast } from "@/components/shared";
 
 interface ParsedItem {
   id: string;
@@ -17,7 +17,7 @@ interface ParsedItem {
 }
 
 interface ParsedInvoice {
-  supplier: { name: string; phone: string; company: string };
+  supplier: { id: string | null; name: string; phone: string; company: string };
   items: ParsedItem[];
   invoiceNumber: string;
   invoiceDate: string;
@@ -73,6 +73,7 @@ export default function InventoryImportPage() {
       // Normalize into the editable shape — sellPrice = cost * (1 + markup%)
       setData({
         supplier: {
+          id: null,
           name: body.supplier?.name ?? "",
           phone: body.supplier?.phone ?? "",
           company: body.supplier?.company ?? "",
@@ -119,6 +120,7 @@ export default function InventoryImportPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           supplier: {
+            id: data.supplier.id,
             name: data.supplier.name.trim(),
             phone: data.supplier.phone.trim() || null,
             company: data.supplier.company.trim() || null,
@@ -212,35 +214,54 @@ export default function InventoryImportPage() {
           </div>
 
           <SectionCard title="بيانات المورد">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField label="اسم المورد" required>
-                <Input
-                  value={data.supplier.name}
-                  onChange={(e) => setData({ ...data, supplier: { ...data.supplier, name: e.target.value } })}
-                  placeholder="اسم المورد"
+            <div className="space-y-4">
+              <FormField label="اختر موردًا موجودًا (أو أضف جديدًا)">
+                <SupplierSelector
+                  value={data.supplier.id ?? ""}
+                  onChange={(id, supplier) =>
+                    setData({
+                      ...data,
+                      supplier: id && supplier
+                        ? { id, name: supplier.name, phone: supplier.phone ?? "", company: supplier.company ?? "" }
+                        : { ...data.supplier, id: null },
+                    })
+                  }
                 />
               </FormField>
-              <FormField label="رقم الهاتف">
-                <Input
-                  value={data.supplier.phone}
-                  onChange={(e) => setData({ ...data, supplier: { ...data.supplier, phone: e.target.value } })}
-                  placeholder="05xxxxxxxx"
-                  dir="ltr"
-                />
-              </FormField>
-              <FormField label="اسم الشركة">
-                <Input
-                  value={data.supplier.company}
-                  onChange={(e) => setData({ ...data, supplier: { ...data.supplier, company: e.target.value } })}
-                />
-              </FormField>
-              <FormField label="رقم الفاتورة">
-                <Input
-                  value={data.invoiceNumber}
-                  onChange={(e) => setData({ ...data, invoiceNumber: e.target.value })}
-                  dir="ltr"
-                />
-              </FormField>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="اسم المورد" required>
+                  <Input
+                    value={data.supplier.name}
+                    onChange={(e) => setData({ ...data, supplier: { ...data.supplier, name: e.target.value } })}
+                    placeholder="اسم المورد"
+                    disabled={!!data.supplier.id}
+                  />
+                </FormField>
+                <FormField label="رقم الهاتف">
+                  <Input
+                    value={data.supplier.phone}
+                    onChange={(e) => setData({ ...data, supplier: { ...data.supplier, phone: e.target.value } })}
+                    placeholder="05xxxxxxxx"
+                    dir="ltr"
+                    disabled={!!data.supplier.id}
+                  />
+                </FormField>
+                <FormField label="اسم الشركة">
+                  <Input
+                    value={data.supplier.company}
+                    onChange={(e) => setData({ ...data, supplier: { ...data.supplier, company: e.target.value } })}
+                    disabled={!!data.supplier.id}
+                  />
+                </FormField>
+                <FormField label="رقم الفاتورة">
+                  <Input
+                    value={data.invoiceNumber}
+                    onChange={(e) => setData({ ...data, invoiceNumber: e.target.value })}
+                    dir="ltr"
+                  />
+                </FormField>
+              </div>
             </div>
           </SectionCard>
 

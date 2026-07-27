@@ -11,5 +11,6 @@ export { SectionCard } from "./SectionCard";
 export { DataTable } from "./DataTable";
 export { Pagination } from "./Pagination";
 export { CustomerSelector } from "./CustomerSelector";
+export { SupplierSelector } from "./SupplierSelector";
 export { ToastProvider, useToast } from "./Toast";
 export { ExportMenu } from "./ExportMenu";
