@@ -19,7 +19,6 @@ export const GET = withAuth<{ id: string }>(async (_req, ctx, { params }) => {
       payables: {
         where: { isDeleted: false },
         orderBy: { createdAt: "desc" },
-        take: 10,
         include: { payments: true },
       },
       _count: {

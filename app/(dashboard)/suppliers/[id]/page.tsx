@@ -36,7 +36,13 @@ export default function SupplierDetailPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", company: "", notes: "" });
 
-  useEffect(() => {
+  const [payingPayable, setPayingPayable] = useState<(Payable & { payments: PayablePayment[] }) | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payNote, setPayNote] = useState("");
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState("");
+
+  const loadSupplier = () => {
     fetch(`/api/suppliers/${id}`)
       .then((r) => r.json())
       .then((d) => {
@@ -45,7 +51,33 @@ export default function SupplierDetailPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [id]);
+  };
+
+  useEffect(loadSupplier, [id]);
+
+  const openPayment = (p: Payable & { payments: PayablePayment[] }) => {
+    const paid = p.payments.reduce((s, pay) => s + Number(pay.amount), 0);
+    const remaining = Number(p.amount) - paid;
+    setPayAmount(remaining.toFixed(2));
+    setPayNote("");
+    setPayError("");
+    setPayingPayable(p);
+  };
+
+  const submitPayment = async () => {
+    if (!payingPayable) return;
+    const amount = parseFloat(payAmount);
+    if (!amount || amount <= 0) { setPayError("أدخل مبلغًا صحيحًا"); return; }
+    setPaying(true);
+    const res = await fetch(`/api/payables/${payingPayable.id}/payment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount, note: payNote || undefined }),
+    });
+    if (res.ok) { setPayingPayable(null); loadSupplier(); }
+    else { const d = await res.json(); setPayError(d.error ?? "حدث خطأ"); }
+    setPaying(false);
+  };
 
   const handleSave = async () => {
     setSaveLoading(true);
@@ -245,7 +277,10 @@ export default function SupplierDetailPage() {
                           <dd className="mt-0.5"><CurrencyDisplay amount={remaining} size="sm" className="text-red-600" /></dd>
                         </div>
                       </dl>
-                      {p.dueDate && <p className="text-xs text-[#94a3b8]">استحقاق: {formatDate(p.dueDate)}</p>}
+                      {p.dueDate && <p className="text-xs text-[#94a3b8] mb-2">استحقاق: {formatDate(p.dueDate)}</p>}
+                      {p.status !== "PAID" && (
+                        <Button size="sm" variant="outline" onClick={() => openPayment(p)}>تسجيل دفعة</Button>
+                      )}
                     </li>
                   );
                 })}
@@ -255,7 +290,7 @@ export default function SupplierDetailPage() {
               <table className="hidden md:table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">
-                    {["السبب", "المبلغ", "المدفوع", "المتبقي", "الحالة", "تاريخ الاستحقاق"].map((h) => (
+                    {["السبب", "المبلغ", "المدفوع", "المتبقي", "الحالة", "تاريخ الاستحقاق", ""].map((h) => (
                       <th key={h} className="text-right px-4 py-3 text-xs font-semibold text-[#64748b]">{h}</th>
                     ))}
                   </tr>
@@ -272,6 +307,11 @@ export default function SupplierDetailPage() {
                         <td className="px-4 py-3"><CurrencyDisplay amount={remaining} size="sm" className="text-red-600" /></td>
                         <td className="px-4 py-3"><StatusBadge status={{ type: "debt", status: p.status }} /></td>
                         <td className="px-4 py-3 text-[#94a3b8] text-xs">{p.dueDate ? formatDate(p.dueDate) : "—"}</td>
+                        <td className="px-4 py-3">
+                          {p.status !== "PAID" && (
+                            <Button size="sm" variant="outline" onClick={() => openPayment(p)}>تسجيل دفعة</Button>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -301,6 +341,26 @@ export default function SupplierDetailPage() {
           </SectionCard>
         </TabsContent>
       </Tabs>
+
+      {payingPayable && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-lg font-bold text-[#0b2345]">تسجيل دفعة</h3>
+            <p className="text-sm text-[#64748b]">
+              إجمالي المستحق: <span className="font-medium ltr">₪{Number(payingPayable.amount).toFixed(2)}</span>
+            </p>
+            <div className="space-y-3">
+              <Input type="number" min="0.01" step="0.01" placeholder="المبلغ" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} autoFocus dir="ltr" />
+              <Input placeholder="ملاحظة (اختياري)" value={payNote} onChange={(e) => setPayNote(e.target.value)} />
+            </div>
+            {payError && <p className="text-xs text-red-600">{payError}</p>}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setPayingPayable(null)}>إلغاء</Button>
+              <Button onClick={submitPayment} disabled={paying}>{paying ? "جاري التسجيل..." : "تسجيل"}</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={deleteOpen}

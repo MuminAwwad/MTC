@@ -15,6 +15,7 @@ import {
   UserCog,
   Truck,
   CreditCard,
+  Wallet,
   Receipt,
   BarChart3,
   Settings,
@@ -61,6 +62,11 @@ const NAV_ITEMS = [
     href: "/debts",
     label: "الديون",
     icon: CreditCard,
+  },
+  {
+    href: "/payables",
+    label: "مستحقات الموردين",
+    icon: Wallet,
   },
   {
     href: "/expenses",

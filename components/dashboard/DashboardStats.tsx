@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { StatCard } from "@/components/shared";
-import { TrendingUp, Wrench, Package, CreditCard, Boxes, Banknote, Coins } from "lucide-react";
+import { TrendingUp, Wrench, Package, CreditCard, Boxes, Banknote, Coins, Wallet } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import prisma from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
@@ -19,7 +19,7 @@ async function getStats(ownerId: string) {
   const monthStart = new Date(today);
   monthStart.setDate(1);
 
-  const [todayInvoices, openTickets, lowStockCount, openDebts, stockValue, monthTickets] = await Promise.all([
+  const [todayInvoices, openTickets, lowStockCount, openDebts, openPayables, stockValue, monthTickets] = await Promise.all([
     prisma.invoice.aggregate({
       where: {
         ownerId,
@@ -48,6 +48,10 @@ async function getStats(ownerId: string) {
       },
       select: { amount: true, payments: { select: { amount: true } } },
     }),
+    prisma.payable.findMany({
+      where: { ownerId, status: { in: ["PENDING", "PARTIAL"] }, isDeleted: false },
+      select: { amount: true, payments: { select: { amount: true } } },
+    }),
     // Inventory value = what's on the shelves, weighted by quantity: at
     // cost (money tied up in stock) and at sell price (potential revenue).
     // Same definition as the inventory report's inventoryValue.
@@ -70,6 +74,11 @@ async function getStats(ownerId: string) {
     return sum + Number(d.amount) - paid;
   }, 0);
 
+  const totalPayable = openPayables.reduce((sum, p) => {
+    const paid = p.payments.reduce((s, pay) => s + Number(pay.amount), 0);
+    return sum + Number(p.amount) - paid;
+  }, 0);
+
   // Ticket profit = final cost minus the cost of parts used; with no parts
   // cost this naturally reduces to the full final cost as profit. Same
   // definition as the reports "ticketProfit" figure, scoped to this month.
@@ -83,6 +92,7 @@ async function getStats(ownerId: string) {
     openTickets,
     lowStockCount,
     totalDebt,
+    totalPayable,
     stockCostValue: Number(stockValue[0]?.cost ?? 0),
     stockSellValue: Number(stockValue[0]?.sell ?? 0),
     monthTicketProfit,
@@ -95,6 +105,7 @@ export async function DashboardStats() {
     openTickets: 0,
     lowStockCount: 0,
     totalDebt: 0,
+    totalPayable: 0,
     stockCostValue: 0,
     stockSellValue: 0,
     monthTicketProfit: 0,
@@ -148,6 +159,14 @@ export async function DashboardStats() {
         iconColor="text-yellow-600"
         iconBg="bg-yellow-100"
         href="/debts"
+      />
+      <StatCard
+        icon={Wallet}
+        label="مستحقات الموردين"
+        value={formatCurrency(stats.totalPayable)}
+        iconColor="text-red-600"
+        iconBg="bg-red-100"
+        href="/payables"
       />
       {isAdmin && (
         <StatCard
