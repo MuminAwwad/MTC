@@ -79,8 +79,11 @@ export async function POST(req: NextRequest) {
     ];
 
     // Always expose both read and write tools so the assistant can act on any
-    // request without a brittle keyword check deciding for it.
-    const tools = [...getToolSchemas(), ...getActionToolSchemas()];
+    // request without a brittle keyword check deciding for it. Admin-only
+    // tools/actions (expenses, employees, ...) are filtered out entirely for
+    // a STAFF session, mirroring the same requireAdmin gates the REST API uses.
+    const role = ctx.dbUser.role;
+    const tools = [...getToolSchemas(role), ...getActionToolSchemas(role)];
 
     const headers = {
       Authorization: `Bearer ${process.env.GEMINI_API_KEY}`,
@@ -174,7 +177,7 @@ export async function POST(req: NextRequest) {
           }
 
           if (isActionTool(call.function.name)) {
-            const preview = await previewAction(call.function.name, ctx.ownerId, args);
+            const preview = await previewAction(call.function.name, ctx.ownerId, role, args);
             if (preview.ok) {
               staged.push(preview.action);
               return { id: call.id, result: { staged: true, summary: preview.action.summary } };
@@ -182,7 +185,7 @@ export async function POST(req: NextRequest) {
             return { id: call.id, result: { error: preview.error } };
           }
 
-          const result = await executeTool(call.function.name, ctx.ownerId, args);
+          const result = await executeTool(call.function.name, ctx.ownerId, role, args);
           return { id: call.id, result };
         })
       );

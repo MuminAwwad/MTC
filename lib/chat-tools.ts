@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import type { UserRole } from "@prisma/client";
 
 // Per-shop read-only tools the chat assistant can call. Every query is
 // scoped by ownerId so a user can never see another shop's data even if the
@@ -12,6 +13,10 @@ export interface ToolDefinition {
     properties: Record<string, unknown>;
     required?: string[];
   };
+  // Mirrors the REST API's requireAdmin-gated endpoints (expenses, reports,
+  // employees) — filtered out of the schema list for STAFF and re-checked at
+  // execute() time so a crafted request can't bypass it either.
+  adminOnly?: boolean;
   execute: (ownerId: string, args: Record<string, unknown>) => Promise<unknown>;
 }
 
@@ -343,6 +348,40 @@ const TOOLS: ToolDefinition[] = [
   },
 
   {
+    name: "get_outstanding_payables",
+    description:
+      "All unpaid amounts owed to suppliers (status PENDING or PARTIAL). Useful for 'who do we owe money to?' style questions.",
+    parameters: { type: "object", properties: {}, required: [] },
+    execute: async (ownerId) => {
+      const payables = await prisma.payable.findMany({
+        where: { ownerId, isDeleted: false, status: { not: "PAID" } },
+        include: {
+          supplier: { select: { name: true, phone: true } },
+          payments: { select: { amount: true } },
+        },
+        orderBy: { dueDate: { sort: "asc", nulls: "last" } },
+        take: 50,
+      });
+      const items = payables.map((p) => {
+        const paid = p.payments.reduce((s, x) => s + Number(x.amount), 0);
+        return {
+          payableId: p.id,
+          supplierName: p.supplier.name,
+          supplierPhone: p.supplier.phone,
+          reason: p.reason,
+          remaining: Number(p.amount) - paid,
+          dueDate: p.dueDate?.toISOString().slice(0, 10) ?? null,
+        };
+      });
+      return {
+        count: items.length,
+        totalILS: items.reduce((s, p) => s + p.remaining, 0),
+        payables: items,
+      };
+    },
+  },
+
+  {
     name: "get_open_tickets",
     description:
       "Maintenance tickets that aren't delivered, cancelled, or marked unrepairable yet. Useful for 'what repairs are still in the shop?'.",
@@ -472,6 +511,28 @@ const TOOLS: ToolDefinition[] = [
   },
 
   {
+    name: "find_store_product",
+    description:
+      "Search the public storefront's products by name (partial, case-insensitive). Returns up to 10 results with their numeric id, origin (manual/synced), and status. Use this to get a product id before editing one — only 'manual' origin products can be edited via chat.",
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+    execute: async (_ownerId, args) => {
+      const q = String(args.query ?? "").trim().toLowerCase();
+      if (!q) return { products: [] };
+      const { getStoreAdminProducts } = await import("./store/catalog");
+      const all = await getStoreAdminProducts();
+      const matches = all
+        .filter((p) => p.name.toLowerCase().includes(q))
+        .slice(0, 10)
+        .map((p) => ({ id: p.id, name: p.name, price: p.price, currency: p.currency, origin: p.origin, status: p.status }));
+      return { products: matches };
+    },
+  },
+
+  {
     name: "find_ticket",
     description:
       "Search maintenance tickets by ticket number, customer name, or device. Returns up to 10 results with their id and current status. Use this to get a ticket id before updating its status.",
@@ -559,12 +620,53 @@ const TOOLS: ToolDefinition[] = [
       };
     },
   },
+
+  {
+    name: "get_expenses",
+    description: "Recent business expenses with amount, category, description, and date. Admin only.",
+    parameters: {
+      type: "object",
+      properties: { limit: { type: "string", description: "How many (1-50). Default 20." } },
+    },
+    adminOnly: true,
+    execute: async (ownerId, args) => {
+      const limit = Math.max(1, Math.min(50, Number(args.limit ?? 20) || 20));
+      const expenses = await prisma.expense.findMany({
+        where: { ownerId, isDeleted: false },
+        include: { category: { select: { name: true } } },
+        orderBy: { date: "desc" },
+        take: limit,
+      });
+      return expenses.map((e) => ({
+        amount: Number(e.amount),
+        currency: e.currency,
+        category: e.category?.name ?? null,
+        description: e.description,
+        date: e.date.toISOString().slice(0, 10),
+      }));
+    },
+  },
+
+  {
+    name: "get_employees",
+    description: "List employees working in this shop (name, email, role, active status). Admin only.",
+    parameters: { type: "object", properties: {}, required: [] },
+    adminOnly: true,
+    execute: async (ownerId) => {
+      const employees = await prisma.user.findMany({
+        where: { shopOwnerId: ownerId, isDeleted: false },
+        select: { id: true, name: true, email: true, role: true, isActive: true },
+        orderBy: { name: "asc" },
+      });
+      return employees;
+    },
+  },
 ];
 
 const TOOL_INDEX = new Map(TOOLS.map((t) => [t.name, t]));
 
-export function getToolSchemas() {
-  return TOOLS.map((t) => ({
+export function getToolSchemas(role: UserRole) {
+  return TOOLS.filter((t) => !t.adminOnly || role === "ADMIN").map((t) => ({
     type: "function" as const,
     function: {
       name: t.name,
@@ -577,10 +679,12 @@ export function getToolSchemas() {
 export async function executeTool(
   name: string,
   ownerId: string,
+  role: UserRole,
   args: Record<string, unknown>
 ): Promise<unknown> {
   const tool = TOOL_INDEX.get(name);
   if (!tool) return { error: `unknown_tool:${name}` };
+  if (tool.adminOnly && role !== "ADMIN") return { error: "هذه العملية تتطلب صلاحيات المدير" };
   try {
     return await tool.execute(ownerId, args);
   } catch (e) {
