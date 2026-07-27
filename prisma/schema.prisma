@@ -197,6 +197,7 @@ model Product {
   sku         String?
   barcode     String?
   description String?
+  images      String[] @default([])
   unit        StockUnit @default(PIECE)
 
   categoryId String?

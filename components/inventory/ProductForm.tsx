@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -44,6 +45,18 @@ export function ProductForm({ initialData, isEdit, onSuccess }: ProductFormProps
   const [newCatName, setNewCatName] = useState("");
   const [newCatSaving, setNewCatSaving] = useState(false);
   const [newCatError, setNewCatError] = useState("");
+  const [generatingDesc, setGeneratingDesc] = useState(false);
+  const [descError, setDescError] = useState("");
+  const [images, setImages] = useState<string[]>(initialData?.images ?? []);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState("");
+  const [searchingImages, setSearchingImages] = useState(false);
+  const [imageCandidates, setImageCandidates] = useState<
+    Array<{ imageUrl: string; sourceTitle: string; sourceUri: string }> | null
+  >(null);
+  const [candidatesOpen, setCandidatesOpen] = useState(false);
+  const [adoptingUrl, setAdoptingUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const createCategory = async () => {
     if (!newCatName.trim()) { setNewCatError("الاسم مطلوب"); return; }
@@ -96,6 +109,97 @@ export function ProductForm({ initialData, isEdit, onSuccess }: ProductFormProps
   const set = (key: keyof typeof form, value: string | boolean) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  const generateDescription = async () => {
+    if (!form.name.trim()) return;
+    setGeneratingDesc(true);
+    setDescError("");
+    try {
+      const res = await fetch("/api/products/describe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.name.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setDescError(data.error ?? "تعذّر توليد الوصف"); return; }
+      set("description", data.description as string);
+    } catch {
+      setDescError("خطأ في الاتصال");
+    } finally {
+      setGeneratingDesc(false);
+    }
+  };
+
+  const uploadImages = async (files: FileList) => {
+    setUploadingImage(true);
+    setImageError("");
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/products/images", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) { setImageError(data.error ?? "تعذّر رفع الصورة"); continue; }
+        setImages((imgs) => [...imgs, data.url as string]);
+      }
+    } catch {
+      setImageError("خطأ في الاتصال");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeImage = async (url: string) => {
+    setImages((imgs) => imgs.filter((u) => u !== url));
+    fetch("/api/products/images", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    }).catch(() => {});
+  };
+
+  const searchImages = async () => {
+    if (!form.name.trim()) return;
+    setSearchingImages(true);
+    setImageError("");
+    setImageCandidates(null);
+    try {
+      const res = await fetch("/api/products/find-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.name.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setImageError(data.error ?? "تعذّر البحث عن صور"); return; }
+      const candidates = data.candidates as Array<{ imageUrl: string; sourceTitle: string; sourceUri: string }>;
+      if (candidates.length === 0) { setImageError("لم يتم العثور على صور مناسبة لهذا المنتج"); return; }
+      setImageCandidates(candidates);
+      setCandidatesOpen(true);
+    } catch {
+      setImageError("خطأ في الاتصال");
+    } finally {
+      setSearchingImages(false);
+    }
+  };
+
+  const adoptCandidate = async (imageUrl: string) => {
+    setAdoptingUrl(imageUrl);
+    try {
+      const res = await fetch("/api/products/images/adopt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: imageUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setImageError(data.error ?? "تعذّر استخدام هذه الصورة"); return; }
+      setImages((imgs) => [...imgs, data.url as string]);
+      setImageCandidates((cs) => cs?.filter((c) => c.imageUrl !== imageUrl) ?? null);
+    } catch {
+      setImageError("خطأ في الاتصال");
+    } finally {
+      setAdoptingUrl(null);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name) { setError("اسم المنتج مطلوب"); return; }
@@ -110,6 +214,7 @@ export function ProductForm({ initialData, isEdit, onSuccess }: ProductFormProps
       sku: form.sku || null,
       barcode: form.barcode || null,
       description: form.description || null,
+      images,
       unit: form.unit,
       categoryId: form.categoryId || null,
       supplierId: form.supplierId || null,
@@ -257,14 +362,93 @@ export function ProductForm({ initialData, isEdit, onSuccess }: ProductFormProps
             </Select>
           </FormField>
 
-          <FormField label="وصف المنتج" className="md:col-span-2">
+          <div className="flex flex-col gap-1.5 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="description">وصف المنتج</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs text-[#104e98] hover:text-[#0b3d7a]"
+                onClick={generateDescription}
+                disabled={!form.name.trim() || generatingDesc}
+                title={!form.name.trim() ? "أدخل اسم المنتج أولًا" : undefined}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {generatingDesc ? "جاري البحث والتوليد..." : "إنشاء بالذكاء الاصطناعي"}
+              </Button>
+            </div>
             <Textarea
+              id="description"
               value={form.description}
               onChange={(e) => set("description", e.target.value)}
-              placeholder="وصف اختياري..."
-              rows={2}
+              placeholder="وصف اختياري... أو اضغط «إنشاء بالذكاء الاصطناعي» لتوليده تلقائيًا"
+              rows={5}
             />
-          </FormField>
+            {descError && <p className="text-xs text-[#ef4444]">{descError}</p>}
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Images */}
+      <SectionCard title="صور المنتج">
+        <div className="space-y-3">
+          {images.length > 0 && (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+              {images.map((url) => (
+                <div key={url} className="relative aspect-square rounded-lg overflow-hidden border border-[#e2e8f0] bg-[#f8fafc] group">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- externally-hosted Blob URLs, not worth next/image's remote-pattern config for this internal admin form */}
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(url)}
+                    className="absolute top-1 left-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="حذف الصورة"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) uploadImages(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingImage}
+            >
+              <Upload className="h-4 w-4" />
+              {uploadingImage ? "جاري الرفع..." : "رفع صورة"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-[#104e98]"
+              onClick={searchImages}
+              disabled={!form.name.trim() || searchingImages}
+              title={!form.name.trim() ? "أدخل اسم المنتج أولًا" : undefined}
+            >
+              <Sparkles className="h-4 w-4" />
+              {searchingImages ? "جاري البحث..." : "اقتراح صور من الإنترنت"}
+            </Button>
+          </div>
+          {imageError && <p className="text-xs text-[#ef4444]">{imageError}</p>}
         </div>
       </SectionCard>
 
@@ -413,6 +597,47 @@ export function ProductForm({ initialData, isEdit, onSuccess }: ProductFormProps
             </Button>
             <Button type="button" onClick={createCategory} disabled={newCatSaving || !newCatName.trim()}>
               {newCatSaving ? "جاري الحفظ..." : "إضافة"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={candidatesOpen} onOpenChange={setCandidatesOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>صور مقترحة من الإنترنت</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+            هذه الصور من مواقع خارجية (نتائج بحث). تأكد من حقوق استخدامها قبل نشرها للعامة.
+          </p>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {(imageCandidates ?? []).length === 0 ? (
+              <p className="text-sm text-[#64748b] text-center py-4">تم استخدام كل الصور المقترحة</p>
+            ) : (
+              imageCandidates!.map((c) => (
+                <div key={c.imageUrl} className="flex items-center gap-3 border border-[#e2e8f0] rounded-lg p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary external URL, preview only */}
+                  <img src={c.imageUrl} alt="" className="w-16 h-16 object-cover rounded-md flex-shrink-0 bg-[#f8fafc]" />
+                  <div className="flex-1 min-w-0">
+                    <a href={c.sourceUri} target="_blank" rel="noopener noreferrer" className="text-xs text-[#104e98] hover:underline truncate block">
+                      {c.sourceTitle}
+                    </a>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => adoptCandidate(c.imageUrl)}
+                    disabled={adoptingUrl === c.imageUrl}
+                  >
+                    {adoptingUrl === c.imageUrl ? "جاري الإضافة..." : "استخدم هذه الصورة"}
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCandidatesOpen(false)}>
+              إغلاق
             </Button>
           </DialogFooter>
         </DialogContent>

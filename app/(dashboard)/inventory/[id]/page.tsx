@@ -235,7 +235,20 @@ export default function ProductDetailPage() {
                 {product.description && (
                   <div className="mt-4 pt-4 border-t border-[#f1f5f9]">
                     <p className="text-[#94a3b8] text-sm mb-1">الوصف</p>
-                    <p className="text-sm text-[#1e293b]">{product.description}</p>
+                    <p className="text-sm text-[#1e293b] whitespace-pre-line">{product.description}</p>
+                  </div>
+                )}
+                {product.images.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-[#f1f5f9]">
+                    <p className="text-[#94a3b8] text-sm mb-2">الصور</p>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      {product.images.map((url) => (
+                        <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-lg overflow-hidden border border-[#e2e8f0] bg-[#f8fafc]">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- externally-hosted Blob URLs */}
+                          <img src={url} alt={product.name} className="w-full h-full object-cover" />
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 )}
               </SectionCard>

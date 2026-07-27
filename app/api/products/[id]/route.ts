@@ -8,6 +8,7 @@ const schema = z.object({
   sku: z.string().optional().nullable(),
   barcode: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
+  images: z.array(z.string()).optional(),
   unit: z.enum(["PIECE", "BOX", "SET", "METER", "OTHER"]).optional(),
   categoryId: z.string().optional().nullable(),
   supplierId: z.string().optional().nullable(),
